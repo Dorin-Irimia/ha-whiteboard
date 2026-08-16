@@ -8,7 +8,7 @@
  * Fara dependinte externe. Tot desenul e vectorial, pe o panza infinita.
  */
 
-const VERSION = '2.4.6';
+const VERSION = '2.4.7';
 
 const STYLES = `
   :host {
@@ -91,7 +91,7 @@ const STYLES = `
     padding: 0; background: none; cursor: pointer;
   }
   input[type="range"] { width: 64px; accent-color: var(--wb-accent); }
-  button {
+  button, .btn {
     background: #2c2f35;
     color: var(--wb-ink);
     border: 1px solid var(--wb-panel-border);
@@ -105,7 +105,7 @@ const STYLES = `
     gap: 5px;
     white-space: nowrap;
   }
-  button:active { background: #3a3e46; }
+  button:active, .btn:active { background: #3a3e46; }
   button.active-tool { background: var(--wb-accent); color: #10131a; border-color: var(--wb-accent); }
   .brushPreview { border-radius: 50%; background: var(--wb-ink); flex-shrink: 0; }
   .zoomLabel { font-size: 12px; color: var(--wb-muted); min-width: 38px; text-align: center; }
@@ -160,12 +160,17 @@ const STYLES = `
 
   /* Ascuns vizual, dar nu cu display:none — pe iOS/Android un input cu
      display:none sau hidden nu deschide selectorul de fisiere. */
+  /* Inputul acopera butonul si e transparent: atingerea utilizatorului cade
+     direct pe el. Un input.click() din JavaScript e refuzat de unele webview-uri
+     Android, care nu il considera un gest real al utilizatorului. */
+  #imageBtn { position: relative; overflow: hidden; cursor: pointer; }
   .fileInput {
     position: absolute;
-    width: 1px; height: 1px;
+    inset: -2px;
+    width: 100%; height: 100%;
     opacity: 0;
-    left: -9999px;
-    pointer-events: none;
+    cursor: pointer;
+    font-size: 0;
   }
 
   .dropHint {
@@ -322,14 +327,13 @@ const MARKUP = `
       <div class="group">
         <button id="syncBadge" data-i18n-title="syncLocal">🖥️</button>
         <button id="emojiToggle" data-i18n-title="emoji">🙂</button>
-        <button id="imageBtn" data-i18n-title="image">🖼️</button>
+        <label id="imageBtn" class="btn" data-i18n-title="image">🖼️<input type="file" id="fileInput" class="fileInput" accept="image/*"></label>
         <button id="undoBtn" data-i18n-title="undo">↶</button>
         <button id="clearBtn" data-i18n-title="clear">🗑️</button>
         <button id="saveBtn" data-i18n-title="export">💾</button>
       </div>
     </div>
 
-    <input type="file" id="fileInput" class="fileInput" accept="image/*">
     <div class="dropHint" id="dropHint" data-i18n="dropHere"></div>
 
     <div class="emojiPanel" id="emojiPanel"></div>
@@ -1124,7 +1128,6 @@ function createWhiteboard(root, options) {
   }
 
   const fileInput = $('fileInput');
-  on($('imageBtn'), 'click', () => fileInput.click());
 
   // Pe unele webview-uri Android evenimentul "change" nu mai ajunge dupa ce
   // selectorul de fisiere se inchide, desi fisierul chiar e in input. Verificam
