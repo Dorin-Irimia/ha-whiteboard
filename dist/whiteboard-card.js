@@ -8,7 +8,7 @@
  * Fara dependinte externe. Tot desenul e vectorial, pe o panza infinita.
  */
 
-const VERSION = '2.4.3';
+const VERSION = '2.4.4';
 
 const STYLES = `
   :host {
@@ -365,7 +365,10 @@ const I18N = {
     notAnImage: 'That file is not a valid image',
     storageFull: 'Storage is full — remove a few images or clear the board',
     syncShared: 'Shared board — everyone on this Home Assistant sees it',
-    syncLocal: 'Local board — only this browser. Install the Whiteboard integration to share it.'
+    syncLocal: 'Local board — only this browser. Install the Whiteboard integration to share it.',
+    imageLoading: 'Loading image…',
+    heicUnsupported: 'This browser cannot open HEIC/HEIF photos. Set the camera to JPEG, or share the photo instead of picking the file.',
+    imageFailed: 'Could not open that photo'
   },
   ro: {
     pen: 'Creion', eraser: 'Radieră', text: 'Text', pan: 'Mută',
@@ -383,7 +386,10 @@ const I18N = {
     notAnImage: 'Fișierul nu este o imagine validă',
     storageFull: 'Spațiul de stocare e plin — șterge câteva imagini sau golește tabla',
     syncShared: 'Tablă partajată — o văd toți din acest Home Assistant',
-    syncLocal: 'Tablă locală — doar în acest browser. Instalează integrarea Whiteboard ca să fie partajată.'
+    syncLocal: 'Tablă locală — doar în acest browser. Instalează integrarea Whiteboard ca să fie partajată.',
+    imageLoading: 'Se încarcă imaginea…',
+    heicUnsupported: 'Browserul nu poate deschide poze HEIC/HEIF. Pune camera pe JPEG, sau trimite poza prin partajare în loc să alegi fișierul.',
+    imageFailed: 'Nu am putut deschide poza'
   },
   de: {
     pen: 'Stift', eraser: 'Radierer', text: 'Text', pan: 'Verschieben',
@@ -401,7 +407,10 @@ const I18N = {
     notAnImage: 'Die Datei ist kein gültiges Bild',
     storageFull: 'Speicher voll — entferne einige Bilder oder leere die Tafel',
     syncShared: 'Geteilte Tafel — alle in diesem Home Assistant sehen sie',
-    syncLocal: 'Lokale Tafel — nur in diesem Browser. Installiere die Whiteboard-Integration zum Teilen.'
+    syncLocal: 'Lokale Tafel — nur in diesem Browser. Installiere die Whiteboard-Integration zum Teilen.',
+    imageLoading: 'Bild wird geladen…',
+    heicUnsupported: 'Dieser Browser kann keine HEIC/HEIF-Fotos öffnen. Stelle die Kamera auf JPEG um oder teile das Foto.',
+    imageFailed: 'Das Foto konnte nicht geöffnet werden'
   },
   fr: {
     pen: 'Crayon', eraser: 'Gomme', text: 'Texte', pan: 'Déplacer',
@@ -419,7 +428,10 @@ const I18N = {
     notAnImage: 'Ce fichier n\'est pas une image valide',
     storageFull: 'Stockage plein — supprimez des images ou videz le tableau',
     syncShared: 'Tableau partagé — tout le monde sur ce Home Assistant le voit',
-    syncLocal: 'Tableau local — seulement ce navigateur. Installez l\'intégration Whiteboard pour le partager.'
+    syncLocal: 'Tableau local — seulement ce navigateur. Installez l\'intégration Whiteboard pour le partager.',
+    imageLoading: 'Chargement de l\'image…',
+    heicUnsupported: 'Ce navigateur ne peut pas ouvrir les photos HEIC/HEIF. Réglez l\'appareil photo sur JPEG ou partagez la photo.',
+    imageFailed: 'Impossible d\'ouvrir cette photo'
   },
   es: {
     pen: 'Lápiz', eraser: 'Borrador', text: 'Texto', pan: 'Mover',
@@ -437,7 +449,10 @@ const I18N = {
     notAnImage: 'El archivo no es una imagen válida',
     storageFull: 'Almacenamiento lleno — elimina imágenes o vacía la pizarra',
     syncShared: 'Pizarra compartida — la ven todos en este Home Assistant',
-    syncLocal: 'Pizarra local — solo este navegador. Instala la integración Whiteboard para compartirla.'
+    syncLocal: 'Pizarra local — solo este navegador. Instala la integración Whiteboard para compartirla.',
+    imageLoading: 'Cargando imagen…',
+    heicUnsupported: 'Este navegador no puede abrir fotos HEIC/HEIF. Configura la cámara en JPEG o comparte la foto.',
+    imageFailed: 'No se pudo abrir esa foto'
   },
   it: {
     pen: 'Matita', eraser: 'Gomma', text: 'Testo', pan: 'Sposta',
@@ -455,7 +470,10 @@ const I18N = {
     notAnImage: 'Il file non è un\'immagine valida',
     storageFull: 'Spazio esaurito — rimuovi immagini o svuota la lavagna',
     syncShared: 'Lavagna condivisa — la vedono tutti su questo Home Assistant',
-    syncLocal: 'Lavagna locale — solo questo browser. Installa l\'integrazione Whiteboard per condividerla.'
+    syncLocal: 'Lavagna locale — solo questo browser. Installa l\'integrazione Whiteboard per condividerla.',
+    imageLoading: 'Caricamento immagine…',
+    heicUnsupported: 'Questo browser non apre le foto HEIC/HEIF. Imposta la fotocamera su JPEG oppure condividi la foto.',
+    imageFailed: 'Non riesco ad aprire quella foto'
   },
   nl: {
     pen: 'Pen', eraser: 'Gum', text: 'Tekst', pan: 'Verplaatsen',
@@ -473,7 +491,10 @@ const I18N = {
     notAnImage: 'Dit bestand is geen geldige afbeelding',
     storageFull: 'Opslag vol — verwijder afbeeldingen of wis het bord',
     syncShared: 'Gedeeld bord — iedereen op deze Home Assistant ziet het',
-    syncLocal: 'Lokaal bord — alleen deze browser. Installeer de Whiteboard-integratie om te delen.'
+    syncLocal: 'Lokaal bord — alleen deze browser. Installeer de Whiteboard-integratie om te delen.',
+    imageLoading: 'Afbeelding laden…',
+    heicUnsupported: 'Deze browser kan geen HEIC/HEIF-foto\'s openen. Zet de camera op JPEG of deel de foto.',
+    imageFailed: 'Kon die foto niet openen'
   }
 };
 
@@ -972,18 +993,34 @@ function createWhiteboard(root, options) {
   // Nu filtram fisierele dupa MIME type sau extensie: galeriile Android trimit adesea
   // content URI-uri fara type si fara extensie in nume. Incercam sa decodam orice, iar
   // daca nu se poate, spunem asta explicit.
+  function isHeic(file) {
+    const type = (file && file.type) || '';
+    const name = (file && file.name) || '';
+    return /hei[cf]/i.test(type) || /\.hei[cf]$/i.test(name);
+  }
+
   function addImageFiles(files, x, y) {
     const all = Array.from(files || []);
     if (!all.length) return;
-    let failed = 0;
+    // Confirmare imediata: pe telefon, decodarea unei poze mari dureaza secunde,
+    // iar fara asta nu se poate spune daca fisierul a fost primit sau nu.
+    toast(t('imageLoading'), 15000);
     all.forEach((file, i) => {
       decodeImage(file)
-        .then(res => placeImage(res.src, res.w, res.h, x + i * 18, y + i * 18))
+        .then(res => {
+          placeImage(res.src, res.w, res.h, x + i * 18, y + i * 18);
+          hideToast();
+        })
         .catch(err => {
-          failed++;
-          console.warn('[whiteboard] nu am putut incarca imaginea',
-            { name: file && file.name, type: file && file.type, size: file && file.size, reason: err && err.message });
-          toast(err && err.message === 'read' ? t('readFailed') : t('notAnImage'));
+          const info = (file && file.name ? file.name : '?') +
+            ' · ' + ((file && file.type) || 'fara tip') +
+            ' · ' + Math.round(((file && file.size) || 0) / 1024) + ' kB';
+          console.warn('[whiteboard] nu am putut incarca imaginea', info, err);
+          let message;
+          if (isHeic(file)) message = t('heicUnsupported');
+          else if (err && err.message === 'read') message = t('readFailed');
+          else message = t('imageFailed') + ' — ' + info;
+          toast(message, 12000);
         });
     });
   }
@@ -1019,9 +1056,15 @@ function createWhiteboard(root, options) {
           .catch(viaReader);
       };
       if (typeof createImageBitmap === 'function') {
-        createImageBitmap(file)
-          .then(bmp => finish(bmp, bmp.width, bmp.height))
-          .catch(viaResizedBitmap);
+        // Peste ~2.5 MB e aproape sigur o poza de telefon de zeci de megapixeli:
+        // decodarea la marime intreaga poate depasi memoria, deci o sarim.
+        if (file && file.size > 2.5 * 1024 * 1024) {
+          viaResizedBitmap();
+        } else {
+          createImageBitmap(file)
+            .then(bmp => finish(bmp, bmp.width, bmp.height))
+            .catch(viaResizedBitmap);
+        }
       } else {
         viaReader();
       }
@@ -1446,8 +1489,14 @@ function createWhiteboard(root, options) {
     if (message) toast(message);
   }
 
+  function hideToast() {
+    const el = root.getElementById('toast');
+    if (el) el.classList.remove('show');
+    clearTimeout(toastTimer);
+  }
+
   let toastTimer = null;
-  function toast(message) {
+  function toast(message, ms) {
     let el = root.getElementById('toast');
     if (!el) {
       el = document.createElement('div');
@@ -1458,7 +1507,7 @@ function createWhiteboard(root, options) {
     el.textContent = message;
     el.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove('show'), 4000);
+    toastTimer = setTimeout(() => el.classList.remove('show'), ms || 4000);
   }
 
   /* ---------- Persistenta ---------- */
