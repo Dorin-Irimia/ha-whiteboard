@@ -1,168 +1,246 @@
-# Whiteboard Card pentru Home Assistant
+# Whiteboard Card for Home Assistant
 
 [![hacs][hacs-badge]][hacs-url]
+[![release][release-badge]][release-url]
 [![license][license-badge]](LICENSE)
 
-O tabla de desen (whiteboard) pentru Home Assistant, cu **panza infinita**.
-Se poate folosi fie ca **custom card** in Lovelace, fie ca pagina separata intr-un card `iframe`.
-Fara dependinte externe, fara build, fara cloud — totul e local.
+**🇬🇧 English** · [🇷🇴 Română](README.ro.md)
+
+An infinite-canvas whiteboard for your Home Assistant dashboard. Draw with a finger or a mouse,
+drop emoji and text notes, pan and zoom forever. No cloud, no integration, no build step —
+a single JavaScript file that runs entirely in your browser.
 
 [hacs-badge]: https://img.shields.io/badge/HACS-Custom-41BDF5.svg
 [hacs-url]: https://github.com/hacs/integration
+[release-badge]: https://img.shields.io/github/v/release/Dorin-Irimia/ha-whiteboard
+[release-url]: https://github.com/Dorin-Irimia/ha-whiteboard/releases
 [license-badge]: https://img.shields.io/badge/license-MIT-blue.svg
 
-## Ce contine
+---
 
-- `dist/whiteboard-card.js` — motorul de desen + cardul Lovelace `custom:whiteboard-card`
-- `dist/whiteboard.html` — pagina de sine statatoare, care foloseste acelasi motor
-- `install.sh` — script care copiaza ambele fisiere in folderul de config HA (instalare manuala)
+## Features
 
-## Functii
+- **Infinite canvas** — the drawing is not limited to the screen. Pan in any direction and keep
+  drawing. Strokes are vectors, so they stay sharp at any zoom level.
+- **Hideable UI** — the round button in the bottom-right corner (or the `H` key) hides the entire
+  toolbar, leaving a clean white surface. The state is remembered.
+- **Emoji and text objects** — move and resize them independently (blue corner = resize,
+  red `✕` = delete).
+- **Eraser that cuts strokes** into pieces instead of painting white over them.
+- Optional dot grid, fullscreen button, undo (`Ctrl+Z`), clear all.
+- **PNG export** of the *entire* board, not just the visible area.
+- **Multiple independent boards** on the same dashboard, via `storage_key`.
+- Everything is stored locally in the browser — nothing leaves your network.
 
-- **Panza infinita** — desenul nu mai e limitat la dimensiunea ecranului; te poti muta si desena oriunde,
-  in orice directie. Traseele sunt vectoriale, deci raman clare la orice zoom.
-- **Interfata ascundibila** — butonul rotund din dreapta-jos (sau tasta `H`) ascunde toata bara de unelte;
-  ramane doar panza alba. Starea se tine minte la reincarcare.
-- Mesajul de ajutor din stanga-jos se poate inchide definitiv cu `x`.
-- Grila de puncte (buton `▦`) — se poate opri; nu apare in PNG-ul exportat.
-- Buton de **ecran complet** (`⛶`) — util cand cardul e mic intr-un dashboard.
-- Desen liber (mouse/deget), culori, grosime linie, radiera (taie traseele, fara pete albe)
-- Obiecte emoji si text — se pot muta si redimensiona independent (colt albastru = resize, x rosu = sterge)
-- Navigare: doua degete (mutare + zoom simultan), rotita mouse-ului, `Ctrl+scroll` pentru zoom,
-  butoanele `+`/`−`, unealta `✋`, click dreapta/mijloc pentru pan. `⤢ Reset` readuce vederea la origine.
-- Undo (`Ctrl+Z`) pentru desen si obiecte, "Sterge tot", salvare ca PNG
-- Salvarea ca PNG exporta **tot continutul**, nu doar ce se vede pe ecran
-- Persistenta locala in browser (localStorage) — ramane desenat la reincarcare, dar NU e sincronizat intre device-uri diferite.
-  Un desen facut cu versiunea veche (panza fixa) este preluat automat ca fundal.
+## Requirements
 
-## Instalare prin HACS (recomandat)
+| Requirement | Details |
+|-------------|---------|
+| Home Assistant | 2023.1 or newer |
+| HACS | Only for the HACS install route — [installation guide](https://hacs.xyz/docs/use/download/download/). Manual install works without it. |
+| Dashboard | A dashboard you can edit. If your Lovelace config is in **YAML mode**, you must register the resource by hand (see below). |
+| Browser | Any modern browser (Chrome, Edge, Firefox, Safari) or the Home Assistant Companion App. Touch and pen input are supported. |
 
-Repo-ul nu e (inca) in magazinul implicit HACS, deci se adauga ca **custom repository**:
+**Not required:** a Home Assistant restart, an integration, a custom component, internet access,
+or any cloud account. This is a frontend-only card.
 
-1. HACS -> meniul cu trei puncte din dreapta sus -> **Custom repositories**
-2. Repository: `https://github.com/Dorin-Irimia/ha-whiteboard` — Type/Category: **Dashboard**
-   (in versiunile mai vechi de HACS se numeste **Lovelace** sau **Plugin**)
-3. **Add**, apoi cauta **Whiteboard Card** in HACS -> **Download**
-4. Reincarca pagina cu `Ctrl+F5`
+> **Where are the drawings stored?** In the browser's `localStorage`, on each device separately.
+> A board drawn on the kitchen tablet is *not* visible on your phone. There is no server-side sync.
 
-HACS pune fisierul in `config/www/community/ha-whiteboard/whiteboard-card.js` si adauga singur
-resursa, daca dashboard-urile tale sunt gestionate din interfata. Daca ai Lovelace in **mod YAML**,
-adauga resursa de mana in `configuration.yaml`:
+---
 
-```yaml
-lovelace:
-  resources:
-    - url: /local/community/ha-whiteboard/whiteboard-card.js
-      type: module
-```
+## Installation via HACS (recommended)
 
-## Instalare manuala (fara HACS)
+This repository is not in the default HACS store yet, so it is added as a **custom repository**.
+
+**1. Add the repository**
+
+1. Open **HACS** in the Home Assistant sidebar
+2. Click the **three-dot menu** (⋮) in the top-right corner → **Custom repositories**
+3. Fill in the dialog:
+   - **Repository:** `https://github.com/Dorin-Irimia/ha-whiteboard`
+   - **Type / Category:** **Dashboard** *(called "Lovelace" or "Plugin" on HACS versions before v2)*
+4. Click **ADD**, then close the dialog
+
+**2. Download the card**
+
+5. Search for **Whiteboard Card** in HACS — it appears right after adding the repository
+6. Open it → **DOWNLOAD** (bottom-right) → confirm the version → **DOWNLOAD**
+
+HACS places the file in `config/www/community/ha-whiteboard/whiteboard-card.js` and **registers the
+Lovelace resource automatically** if your dashboards are UI-managed.
+
+**3. Clear the browser cache**
+
+7. Press **`Ctrl` + `Shift` + `R`** (or `Ctrl+F5`)
+
+On the Companion App: **Settings → Companion App → Debugging → Reset frontend cache**, or fully
+close and reopen the app. Skipping this step is the number one cause of
+*"Custom element doesn't exist"*.
+
+**4. Add the card to a dashboard**
+
+8. Open your dashboard → **✏️** (edit mode) → **+ ADD CARD**
+9. Search for **Whiteboard** and pick it
+10. Adjust title, height and grid in the visual editor → **SAVE**
+
+## Manual installation (without HACS)
 
 ```bash
 git clone https://github.com/Dorin-Irimia/ha-whiteboard.git
 cd ha-whiteboard
 chmod +x install.sh
-./install.sh /calea/catre/config/home-assistant
+./install.sh /path/to/your/homeassistant/config
 ```
 
-Sau pur si simplu copiaza fisierele:
+Or simply copy the files into your config folder:
 
 ```bash
-cp dist/whiteboard-card.js dist/whiteboard.html /calea/catre/config/home-assistant/www/
+cp dist/whiteboard-card.js dist/whiteboard.html /path/to/config/www/
 ```
 
-Folderul `www` e servit automat la `/local/...`, deci calea resursei devine `/local/whiteboard-card.js`.
+The `www` folder is served automatically at `/local/...`, so the resource URL becomes
+`/local/whiteboard-card.js`. Then register the resource as described below.
 
-## Adaugarea resursei manual
+## Registering the resource manually
 
-Necesar doar la instalarea manuala, sau daca ai Lovelace in mod YAML.
-**Settings -> Dashboards -> meniul din dreapta sus -> Resources -> Add resource**
+Needed only for manual installs, or when Lovelace runs in YAML mode.
 
-| Camp | Valoare |
-|------|---------|
-| URL  | `/local/whiteboard-card.js` (HACS: `/local/community/ha-whiteboard/whiteboard-card.js`) |
-| Type | `JavaScript Module` |
+**UI-managed dashboards:** **Settings → Dashboards → ⋮ → Resources → Add resource**
 
-In mod YAML, aceeasi resursa in `configuration.yaml`, cu `type: module`.
-Adauga `?v=2` la URL si creste numarul la fiecare actualizare, ca sa nu ramai cu fisierul din cache.
+| Field | Value |
+|-------|-------|
+| URL | `/local/community/ha-whiteboard/whiteboard-card.js` (HACS) or `/local/whiteboard-card.js` (manual) |
+| Type | **JavaScript Module** |
 
-Apoi reincarca pagina cu `Ctrl+F5` (pe tableta: inchide si redeschide aplicatia).
+**YAML mode** — in `configuration.yaml`, inside your existing `lovelace:` block:
 
-## Utilizare
+```yaml
+lovelace:
+  resources:
+    - url: /local/whiteboard-card.js?v=1
+      type: module
+```
 
-In editorul de dashboard, **Add Card -> "Whiteboard"** (are si editor vizual), sau direct din YAML:
+Resources declared in YAML are only read at startup, so **restart Home Assistant** afterwards.
+Bump the `?v=` number on every update, otherwise the browser keeps serving the cached file.
+
+---
+
+## Usage
 
 ```yaml
 type: custom:whiteboard-card
-title: Whiteboard        # optional; sterge randul pentru card fara titlu
-height: 420              # inaltimea zonei de desen, in px
-grid: true               # grila de puncte
-hide_toolbar: false      # true = porneste cu butoanele ascunse
-storage_key: ha_whiteboard_v3   # optional
+title: Whiteboard
+height: 420
 ```
 
-### Mai multe table separate
+### Card options
 
-Fiecare `storage_key` diferit inseamna o tabla separata, salvata independent:
+| Option | Default | Description |
+|--------|---------|-------------|
+| `title` | — | Card header; omit for a card without a header |
+| `height` | `420` | Height of the drawing area: a number (px) or a string (`85vh`) |
+| `grid` | `true` | Dot grid |
+| `hide_toolbar` | `false` | Start with the toolbar hidden |
+| `storage_key` | `ha_whiteboard_v3` | Storage key — a different key means a separate board |
+
+### A full-screen board
 
 ```yaml
-type: custom:whiteboard-card
-title: Bucatarie
-storage_key: wb_bucatarie
+views:
+  - title: Whiteboard
+    panel: true
+    cards:
+      - type: custom:whiteboard-card
+        height: 85vh
 ```
 
-### Optiuni card
+### Several independent boards
 
-| Optiune | Implicit | Descriere |
-|---------|----------|-----------|
-| `title` | — | Titlul cardului; lipseste = card fara antet |
-| `height` | `420` | Inaltimea zonei de desen: numar (px) sau text (`85vh`) |
-| `grid` | `true` | Grila de puncte |
-| `hide_toolbar` | `false` | Porneste cu bara de unelte ascunsa |
-| `storage_key` | `ha_whiteboard_v3` | Cheia de stocare; chei diferite = table diferite |
+```yaml
+- type: custom:whiteboard-card
+  title: Kitchen
+  storage_key: wb_kitchen
 
-Pentru o tabla pe tot ecranul, foloseste un view cu `panel: true` si `height: 85vh`.
+- type: custom:whiteboard-card
+  title: Office
+  storage_key: wb_office
+```
 
-## Varianta alternativa: iframe (nu necesita inregistrarea unei resurse)
+### Controls
+
+| Action | How |
+|--------|-----|
+| Draw | Mouse or finger |
+| Pan | Two fingers, the `✋` tool, mouse wheel, or middle/right-drag |
+| Zoom | Pinch, `Ctrl` + scroll, or the `+` / `−` buttons |
+| Back to origin | `⤢` |
+| Hide/show the toolbar | The round button, or the `H` key |
+| Undo | `↶` or `Ctrl+Z` |
+| Export PNG | `💾` |
+
+### Alternative: iframe card
+
+Works without registering any resource:
 
 ```yaml
 type: iframe
 url: /local/whiteboard.html
-title: Whiteboard
 aspect_ratio: 90%
 ```
 
-Pagina accepta si parametri: `?key=birou` (tabla separata), `?grid=0` (fara grila),
-`?clean=1` (porneste cu butoanele ascunse) — de exemplu `/local/whiteboard.html?key=birou&clean=1`.
+The page also accepts parameters: `?key=office` (separate board), `?grid=0` (no grid),
+`?clean=1` (start with the toolbar hidden).
 
-> Notele sunt tinute in `localStorage`-ul browserului, deci cardul si pagina `iframe`
-> impart aceeasi tabla daca folosesc aceeasi cheie, dar **nu** se sincronizeaza intre
-> device-uri diferite.
+HACS only downloads the JavaScript file, so if you want the iframe variant too, copy
+`dist/whiteboard.html` next to it, into `config/www/community/ha-whiteboard/`, and point the card at
+`/local/community/ha-whiteboard/whiteboard.html`.
 
-La instalarea prin HACS, `whiteboard.html` nu este copiat (HACS descarca doar fisierul JS).
-Daca vrei si varianta iframe, copiaza `dist/whiteboard.html` langa fisierul instalat de HACS,
-in `config/www/community/ha-whiteboard/`, si foloseste
-`url: /local/community/ha-whiteboard/whiteboard.html`.
+---
 
-## Note
+## Notes
 
-- **Butonul 💾 exporta un PNG**, nu salveaza notitele — desenul se salveaza singur, continuu.
-  In cardul `iframe`, HA blocheaza descarcarile (sandbox fara `allow-downloads`), asa ca imaginea
-  se deschide intr-o fila noua, de unde o poti salva. In custom card descarcarea merge direct.
-- Tabla e locala fiecarui browser/device. Nu exista sincronizare intre tableta si telefon.
+- **The 💾 button exports a PNG — it does not save your notes.** The board saves itself
+  continuously, on every stroke. Inside the `iframe` card, Home Assistant blocks downloads
+  (the sandbox has no `allow-downloads`), so the image opens in a new tab instead, where you can
+  save it. In the custom card, the download works directly.
+- Boards are per browser and per device. There is no sync between your tablet and your phone.
+- A board drawn with version 1.x (fixed canvas, stored as PNG) is imported automatically as a
+  background layer, so nothing is lost.
 
-## Actualizare ulterioara
+## Troubleshooting
 
-Prin HACS: HACS -> Whiteboard Card -> **Update**, apoi `Ctrl+F5`.
+| Symptom | Cause and fix |
+|---------|---------------|
+| `Custom element doesn't exist: whiteboard-card` | Browser cache. Hard-reload. If it persists, check **Settings → Dashboards → ⋮ → Resources** for the URL and make sure the type is **JavaScript Module**. |
+| *"Your resources are in YAML mode"* instead of the resource list | Lovelace is in YAML mode; HACS cannot register the resource. Add it to `configuration.yaml` and restart. |
+| The card shows up but is empty or squashed | Increase `height`, or use a view with `panel: true`. |
+| HACS refuses to add the repository | The category must be **Dashboard** (not Integration), and the URL must include `https://`. |
+| The PNG never downloads | You are using the `iframe` card — the image opens in a new tab. Allow pop-ups for your Home Assistant address. |
 
-Manual:
+## Updating
+
+**HACS:** a notification appears on new releases → **HACS → Whiteboard Card → UPDATE**, then
+hard-reload the browser. The resource does not need to be reconfigured.
+
+**Manual:**
 
 ```bash
 cd ha-whiteboard
 git pull
-./install.sh /calea/catre/config/home-assistant
+./install.sh /path/to/config
 ```
 
-## Licenta
+## Repository layout
 
-MIT — vezi [LICENSE](LICENSE).
+```
+dist/whiteboard-card.js   the drawing engine + the custom:whiteboard-card element
+dist/whiteboard.html      standalone page (iframe variant), uses the same engine
+install.sh                copies both files into the Home Assistant config folder
+hacs.json                 HACS metadata
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).

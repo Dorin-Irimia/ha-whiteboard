@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-# Instaleaza whiteboard-ul in folderul www al Home Assistant
-# Ruleaza acest script DIRECT PE MASINA UNDE RULEAZA HOME ASSISTANT (ex: Jetson Nano)
+# Manual installer for the Home Assistant Whiteboard Card.
+# Run this ON THE MACHINE THAT RUNS HOME ASSISTANT.
 #
-# Foloseste: ./install.sh /calea/catre/config/ha
-# Daca nu dai argument, incearca calea implicita: ~/homeassistant
+# Usage:  ./install.sh /path/to/homeassistant/config
+# Without an argument it falls back to: ~/homeassistant
+#
+# Not needed if you install through HACS.
+#
+# RO: Instalare manuala. Ruleaza scriptul pe masina unde ruleaza Home Assistant.
+#     Folosire: ./install.sh /calea/catre/config    Nu e necesar daca instalezi prin HACS.
 
 set -e
 
@@ -12,8 +17,16 @@ WWW_DIR="$HA_CONFIG_DIR/www"
 SRC_DIR="$(dirname "$0")/dist"
 
 if [ ! -d "$HA_CONFIG_DIR" ]; then
-  echo "Nu gasesc folderul de config HA la: $HA_CONFIG_DIR"
-  echo "Ruleaza din nou: ./install.sh /calea/corecta/catre/config"
+  echo "Config folder not found: $HA_CONFIG_DIR"
+  echo "RO: Nu gasesc folderul de config HA la calea de mai sus."
+  echo ""
+  echo "Try again with the correct path:  ./install.sh /path/to/config"
+  exit 1
+fi
+
+if [ ! -f "$SRC_DIR/whiteboard-card.js" ]; then
+  echo "Source files not found in: $SRC_DIR"
+  echo "Run this script from inside the cloned repository."
   exit 1
 fi
 
@@ -21,30 +34,42 @@ mkdir -p "$WWW_DIR"
 cp "$SRC_DIR/whiteboard-card.js" "$WWW_DIR/whiteboard-card.js"
 cp "$SRC_DIR/whiteboard.html"    "$WWW_DIR/whiteboard.html"
 
-echo ""
-echo "Copiat cu succes in: $WWW_DIR"
-echo "  - whiteboard-card.js  (cardul Lovelace)"
-echo "  - whiteboard.html     (pagina de sine statatoare / varianta iframe)"
-echo ""
-echo "== Varianta 1 (recomandata): custom card =="
-echo ""
-echo "1. Adauga resursa o singura data:"
-echo "   Settings -> Dashboards -> (meniul din dreapta sus) Resources -> Add resource"
-echo "     URL:  /local/whiteboard-card.js"
-echo "     Type: JavaScript Module"
-echo "   Apoi reincarca pagina cu Ctrl+F5 (sau goleste cache-ul pe tableta)."
-echo ""
-echo "2. In dashboard: Add Card -> cauta \"Whiteboard\", sau Show code editor:"
-echo ""
-echo "   type: custom:whiteboard-card"
-echo "   height: 420"
-echo "   title: Whiteboard"
-echo ""
-echo "== Varianta 2: iframe (fara resurse de adaugat) =="
-echo ""
-echo "   type: iframe"
-echo "   url: /local/whiteboard.html"
-echo "   aspect_ratio: 90%"
-echo ""
-echo "Nu e nevoie de restart HA — folderul www e servit automat la /local/..."
-echo ""
+cat <<EOF
+
+Installed into: $WWW_DIR
+  - whiteboard-card.js   the Lovelace card
+  - whiteboard.html      standalone page (iframe variant)
+
+NEXT STEPS / PASII URMATORI
+
+1. Register the resource / Inregistreaza resursa
+   UI:   Settings -> Dashboards -> (three dots) Resources -> Add resource
+           URL:  /local/whiteboard-card.js?v=1
+           Type: JavaScript Module
+   YAML: add to configuration.yaml under your existing lovelace: block
+
+           lovelace:
+             resources:
+               - url: /local/whiteboard-card.js?v=1
+                 type: module
+
+         then restart Home Assistant (YAML resources are read at startup only).
+
+2. Hard-reload the browser: Ctrl+Shift+R
+   RO: Goleste cache-ul browserului, altfel primesti "Custom element doesn't exist".
+
+3. Add the card / Adauga cardul
+
+     type: custom:whiteboard-card
+     title: Whiteboard
+     height: 420
+
+   Or without registering any resource / Sau fara nicio resursa:
+
+     type: iframe
+     url: /local/whiteboard.html
+     aspect_ratio: 90%
+
+Docs: README.md (English) | README.ro.md (Romana)
+
+EOF
