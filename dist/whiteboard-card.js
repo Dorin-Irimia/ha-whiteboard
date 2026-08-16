@@ -8,7 +8,7 @@
  * Fara dependinte externe. Tot desenul e vectorial, pe o panza infinita.
  */
 
-const VERSION = '2.2.1';
+const VERSION = '2.2.2';
 
 const STYLES = `
   :host {
@@ -946,36 +946,38 @@ function createWhiteboard(root, options) {
   const JPEG_QUALITY = 0.82;
   const PLACED_MAX = 320;       // latimea maxima la asezarea pe tabla, in unitati "lume"
 
-  // Unele galerii de telefon trimit fisiere fara MIME type, deci verificam si extensia.
-  const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|avif|heic|heif|svg)$/i;
-  function looksLikeImage(f) {
-    if (!f) return false;
-    if (f.type) return /^image\//.test(f.type);
-    return IMAGE_EXT.test(f.name || '');
-  }
-
+  // Nu filtram fisierele dupa MIME type sau extensie: galeriile Android trimit adesea
+  // content URI-uri fara type si fara extensie in nume. Incercam sa decodam orice, iar
+  // daca nu se poate, spunem asta explicit.
   function addImageFiles(files, x, y) {
     const all = Array.from(files || []);
-    const list = all.filter(looksLikeImage);
-    if (!list.length) {
-      if (all.length) toast(t('notAnImage'));
-      return;
-    }
-    list.forEach((file, i) => {
+    if (!all.length) return;
+    let failed = 0;
+    all.forEach((file, i) => {
       decodeImage(file)
         .then(res => placeImage(res.src, res.w, res.h, x + i * 18, y + i * 18))
-        .catch(err => toast(err && err.message === 'read' ? t('readFailed') : t('notAnImage')));
+        .catch(err => {
+          failed++;
+          console.warn('[whiteboard] nu am putut incarca imaginea',
+            { name: file && file.name, type: file && file.type, size: file && file.size, reason: err && err.message });
+          toast(err && err.message === 'read' ? t('readFailed') : t('notAnImage'));
+        });
     });
   }
 
-  // createImageBitmap acopera si formate pe care <img> le refuza (HEIC pe Safari, AVIF vechi),
-  // iar FileReader ramane ca rezerva pentru browserele care nu il au.
+  // Decodarea escaladeaza in trei trepte, ca sa acopere si telefoanele:
+  //   1. createImageBitmap — codecurile sistemului (HEIC de pe iPhone, HEIF de pe Samsung)
+  //   2. acelasi, dar cu redimensionare la decodare — pentru poze de zeci de megapixeli,
+  //      unde decodarea la marime intreaga da out-of-memory pe mobil
+  //   3. FileReader + <img> — pentru browsere fara createImageBitmap
   function decodeImage(file) {
     return new Promise((resolve, reject) => {
       const finish = (source, w, h) => {
         if (!w || !h) { reject(new Error('decode')); return; }
-        try { resolve(shrink(source, w, h)); } catch (err) { reject(new Error('decode')); }
+        let out = null;
+        try { out = shrink(source, w, h); } catch (err) { reject(new Error('decode')); return; }
         if (source.close) source.close();
+        resolve(out);
       };
       const viaReader = () => {
         const reader = new FileReader();
@@ -988,10 +990,15 @@ function createWhiteboard(root, options) {
         reader.onerror = () => reject(new Error('read'));
         reader.readAsDataURL(file);
       };
+      const viaResizedBitmap = () => {
+        createImageBitmap(file, { resizeWidth: MAX_IMG_DIM, resizeQuality: 'high' })
+          .then(bmp => finish(bmp, bmp.width, bmp.height))
+          .catch(viaReader);
+      };
       if (typeof createImageBitmap === 'function') {
         createImageBitmap(file)
           .then(bmp => finish(bmp, bmp.width, bmp.height))
-          .catch(viaReader);
+          .catch(viaResizedBitmap);
       } else {
         viaReader();
       }
