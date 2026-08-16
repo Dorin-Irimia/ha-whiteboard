@@ -274,14 +274,21 @@ dashboard can draw on it, and everyone sees the result.
 
 ### 5.1 Installing the integration
 
-**Through HACS** — add the *same* repository a second time, under a different category:
+The integration **also serves the card**, so this is the shortest install of all: one HACS entry,
+no `www/` file to copy, and no Lovelace resource to register — which means it works on Home
+Assistant OS and with Lovelace in YAML mode alike.
+
+**Through HACS**
 
 1. HACS → ⋮ → **Custom repositories**
    - Repository: `https://github.com/Dorin-Irimia/ha-whiteboard`
    - Category: **Integration**
 2. Search for **Whiteboard** in HACS → **DOWNLOAD**
-3. **Restart Home Assistant** (integrations, unlike cards, need a restart)
+3. **Restart Home Assistant** — an integration is only picked up at startup
 4. **Settings → Devices & Services → + Add integration → Whiteboard** → Submit
+
+If HACS refuses the repository because you already added it as a *Dashboard*, remove that entry
+first (HACS → Whiteboard Card → ⋮ → Remove) and add it back as **Integration**.
 
 **Manually** — copy the folder and restart:
 
@@ -289,8 +296,16 @@ dashboard can draw on it, and everyone sees the result.
 cp -r custom_components/ha_whiteboard /path/to/config/custom_components/
 ```
 
-Nothing else changes: the card notices the integration on its own and switches from per-browser
-storage to the shared board. Without the integration it keeps working exactly as before.
+Instead of the config-entry step you may also add a single line to `configuration.yaml`:
+
+```yaml
+ha_whiteboard:
+```
+
+Either way the card notices the integration on its own and switches from per-browser storage to the
+shared board. Without the integration it keeps working exactly as before.
+
+**Did it work?** The toolbar shows ☁️ for a shared board and 🖥️ for a local one.
 
 ### 5.2 How the sharing works
 

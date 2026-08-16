@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import json
 import logging
+import pathlib
+import re
 import time
 from typing import Any, Callable
 
@@ -26,7 +28,15 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN, MAX_BOARD_BYTES, SAVE_DELAY, STORAGE_KEY, STORAGE_VERSION
+from .const import (
+    CARD_FILENAME,
+    DOMAIN,
+    MAX_BOARD_BYTES,
+    SAVE_DELAY,
+    STORAGE_KEY,
+    STORAGE_VERSION,
+    URL_BASE,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -159,23 +169,92 @@ class BoardTooLarge(Exception):
         self.size = size
 
 
+async def _async_ensure_store(hass: HomeAssistant) -> BoardStore:
+    """Create the store the first time it is needed."""
+    store = hass.data.get(DOMAIN)
+    if isinstance(store, BoardStore):
+        return store
+    store = BoardStore(hass)
+    await store.async_load()
+    hass.data[DOMAIN] = store
+    return store
+
+
+async def _async_register_card(hass: HomeAssistant) -> None:
+    """Serve the Lovelace card from the integration and load it on every dashboard.
+
+    This is what makes a single HACS entry enough: no static file to copy into
+    www/ and no Lovelace resource to register by hand, which also means it works
+    when Lovelace runs in YAML mode.
+    """
+    if hass.data.get(f"{DOMAIN}_card_registered"):
+        return
+
+    source = pathlib.Path(__file__).parent / "frontend" / CARD_FILENAME
+    if not source.is_file():
+        _LOGGER.warning(
+            "Whiteboard card file is missing at %s; install the card separately", source
+        )
+        return
+
+    url = f"{URL_BASE}/{CARD_FILENAME}"
+    try:
+        from homeassistant.components.http import StaticPathConfig
+
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(url, str(source), True)]
+        )
+    except ImportError:  # Home Assistant older than 2024.7
+        hass.http.register_static_path(url, str(source), True)
+
+    version = _card_version(source)
+    try:
+        from homeassistant.components.frontend import add_extra_js_url
+
+        add_extra_js_url(hass, f"{url}?v={version}")
+    except Exception:  # noqa: BLE001 - the card can still be added as a resource
+        _LOGGER.exception("Could not add the Whiteboard card to the frontend")
+        return
+
+    hass.data[f"{DOMAIN}_card_registered"] = True
+    _LOGGER.info("Whiteboard card %s served at %s", version, url)
+
+
+def _card_version(source: pathlib.Path) -> str:
+    """Read VERSION out of the card, so the URL changes when the card changes."""
+    try:
+        head = source.read_text(encoding="utf-8")[:2000]
+        match = re.search(r"const VERSION = '([^']+)'", head)
+        if match:
+            return match.group(1)
+    except OSError:
+        pass
+    return "0"
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register the websocket API once, whatever way the component is loaded."""
+    """Set up however the component was loaded.
+
+    This runs both for a config entry and for a bare `ha_whiteboard:` line in
+    configuration.yaml, so either way is enough to get shared boards.
+    """
     websocket_api.async_register_command(hass, ws_get)
     websocket_api.async_register_command(hass, ws_apply)
     websocket_api.async_register_command(hass, ws_subscribe)
+    await _async_ensure_store(hass)
+    await _async_register_card(hass)
+    _LOGGER.info("Whiteboard shared storage is ready")
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    store = BoardStore(hass)
-    await store.async_load()
-    hass.data[DOMAIN] = store
+    await _async_ensure_store(hass)
+    await _async_register_card(hass)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    hass.data.pop(DOMAIN, None)
+    # The websocket API stays registered; boards remain readable until restart.
     return True
 
 

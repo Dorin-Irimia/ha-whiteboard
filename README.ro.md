@@ -275,14 +275,21 @@ dashboard-ul poate desena pe ea, și toată lumea vede rezultatul.
 
 ### 5.1 Instalarea integrării
 
-**Prin HACS** — adaugi *același* repo a doua oară, sub altă categorie:
+Integrarea **servește și cardul**, deci asta e cea mai scurtă instalare: o singură intrare în HACS,
+niciun fișier de copiat în `www/` și nicio resursă Lovelace de înregistrat — adică merge și pe
+Home Assistant OS, și cu Lovelace în mod YAML.
+
+**Prin HACS**
 
 1. HACS → ⋮ → **Custom repositories**
    - Repository: `https://github.com/Dorin-Irimia/ha-whiteboard`
    - Category: **Integration**
 2. Caută **Whiteboard** în HACS → **DOWNLOAD**
-3. **Repornește Home Assistant** (integrările, spre deosebire de carduri, cer restart)
+3. **Repornește Home Assistant** — o integrare se încarcă doar la pornire
 4. **Settings → Devices & Services → + Add integration → Whiteboard** → Submit
+
+Dacă HACS refuză repo-ul pentru că l-ai adăugat deja ca *Dashboard*, șterge întâi intrarea aceea
+(HACS → Whiteboard Card → ⋮ → Remove) și adaug-o din nou ca **Integration**.
 
 **Manual** — copiezi folderul și repornești:
 
@@ -290,8 +297,17 @@ dashboard-ul poate desena pe ea, și toată lumea vede rezultatul.
 cp -r custom_components/ha_whiteboard /calea/catre/config/custom_components/
 ```
 
-Nu trebuie schimbat nimic altceva: cardul observă singur integrarea și trece de la stocarea pe
-browser la tabla partajată. Fără integrare, funcționează exact ca înainte.
+În loc de pasul cu adăugarea integrării din interfață, poți pune o singură linie în
+`configuration.yaml`:
+
+```yaml
+ha_whiteboard:
+```
+
+Oricum ai face, cardul observă singur integrarea și trece de la stocarea pe browser la tabla
+partajată. Fără integrare, funcționează exact ca înainte.
+
+**A mers?** În bara de unelte apare ☁️ pentru tablă partajată și 🖥️ pentru tablă locală.
 
 ### 5.2 Cum funcționează partajarea
 
