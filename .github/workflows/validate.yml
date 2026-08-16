@@ -8,14 +8,27 @@ on:
   workflow_dispatch:
 
 jobs:
-  hacs:
-    name: HACS validation
+  hacs-integration:
+    name: HACS validation (integration)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: hacs/action@main
         with:
           category: integration
+          # "brands" only matters for inclusion in the HACS default store, which
+          # requires a PR to home-assistant/brands. Custom repositories install
+          # and update without it.
+          ignore: brands
+
+  hacs-plugin:
+    name: HACS validation (dashboard card)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hacs/action@main
+        with:
+          category: plugin
 
   consistency:
     name: Card copies match
