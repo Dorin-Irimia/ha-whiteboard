@@ -1,0 +1,1336 @@
+/*
+ * HA Whiteboard — custom card pentru Lovelace + motorul de desen.
+ *
+ * Defineste doua elemente:
+ *   <whiteboard-board>  — tabla propriu-zisa (folosita si de whiteboard.html standalone)
+ *   <whiteboard-card>   — cardul Lovelace (type: custom:whiteboard-card)
+ *
+ * Fara dependinte externe. Tot desenul e vectorial, pe o panza infinita.
+ */
+
+const VERSION = '2.0';
+
+const STYLES = `
+  :host {
+    display: block;
+    position: relative;
+    width: 100%;
+    height: 100%;
+    --wb-panel: rgba(35,37,41,0.92);
+    --wb-panel-border: #3a3d44;
+    --wb-ink: #f2f1ee;
+    --wb-muted: #9a9da3;
+    --wb-accent: #5eb1ff;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  .wb {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    background: #ffffff;
+    border-radius: inherit;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--wb-ink);
+    touch-action: none;
+  }
+  .wb:fullscreen { border-radius: 0; }
+
+  .canvasWrap { position: absolute; inset: 0; overflow: hidden; }
+  canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; }
+  .objectLayer {
+    position: absolute; top: 0; left: 0; width: 0; height: 0;
+    transform-origin: 0 0;
+    pointer-events: none;
+  }
+
+  /* ---------- Bara de unelte (overlay, ascundibila) ---------- */
+  .toolbar {
+    position: absolute;
+    top: 8px; left: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px;
+    background: var(--wb-panel);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--wb-panel-border);
+    border-radius: 14px;
+    flex-wrap: wrap;
+    max-width: calc(100% - 16px);
+    z-index: 20;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .wb.chrome-hidden .toolbar,
+  .wb.chrome-hidden .hint {
+    opacity: 0;
+    transform: translateY(-12px);
+    pointer-events: none;
+  }
+  .group {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 7px;
+    background: rgba(27,29,33,0.85);
+    border-radius: 10px;
+    border: 1px solid var(--wb-panel-border);
+  }
+  .swatch {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .swatch.active { border-color: var(--wb-ink); }
+  input[type="color"] {
+    width: 24px; height: 24px;
+    border: none; border-radius: 50%;
+    padding: 0; background: none; cursor: pointer;
+  }
+  input[type="range"] { width: 64px; accent-color: var(--wb-accent); }
+  button {
+    background: #2c2f35;
+    color: var(--wb-ink);
+    border: 1px solid var(--wb-panel-border);
+    border-radius: 8px;
+    padding: 6px 9px;
+    font-size: 12.5px;
+    font-family: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+  button:active { background: #3a3e46; }
+  button.active-tool { background: var(--wb-accent); color: #10131a; border-color: var(--wb-accent); }
+  .brushPreview { border-radius: 50%; background: var(--wb-ink); flex-shrink: 0; }
+  .zoomLabel { font-size: 12px; color: var(--wb-muted); min-width: 38px; text-align: center; }
+
+  /* ---------- Buton de ascundere ---------- */
+  .chromeToggle {
+    position: absolute;
+    right: 10px; bottom: 10px;
+    width: 40px; height: 40px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--wb-panel);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--wb-panel-border);
+    font-size: 15px;
+    opacity: 0.5;
+    z-index: 30;
+    transition: opacity .18s ease;
+  }
+  .chromeToggle:hover { opacity: 1; }
+  .wb.chrome-hidden .chromeToggle { opacity: 0.22; }
+  .wb.chrome-hidden .chromeToggle:hover { opacity: 0.9; }
+
+  /* ---------- Obiecte (emoji / text) ---------- */
+  .obj {
+    position: absolute;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    cursor: move;
+    border: 1px solid transparent;
+  }
+  .obj .txt { line-height: 1.1; outline: none; white-space: nowrap; }
+  .obj.text .txt { color: inherit; user-select: text; }
+  .obj.text { color: #111; }
+  .obj.selected { border: 1px dashed var(--wb-accent); }
+  .handle {
+    position: absolute;
+    width: 18px; height: 18px;
+    background: var(--wb-accent);
+    border-radius: 50%;
+    right: -9px; bottom: -9px;
+    cursor: nwse-resize;
+    display: none;
+  }
+  .obj.selected .handle { display: block; }
+  .del-handle {
+    position: absolute;
+    width: 18px; height: 18px;
+    background: #e03131;
+    color: #fff;
+    border-radius: 50%;
+    right: -9px; top: -9px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .obj.selected .del-handle { display: flex; }
+
+  .emojiPanel {
+    position: absolute;
+    top: 8px; right: 8px;
+    background: var(--wb-panel);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--wb-panel-border);
+    border-radius: 10px;
+    padding: 6px;
+    display: none;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 2px;
+    max-width: 260px;
+    z-index: 21;
+  }
+  .emojiPanel.open { display: grid; }
+  .wb.chrome-hidden .emojiPanel { display: none; }
+  .emoji-btn { font-size: 20px; background: none; border: none; padding: 4px; cursor: pointer; border-radius: 6px; }
+  .emoji-btn:active { background: #3a3e46; }
+
+  .hint {
+    position: absolute;
+    bottom: 10px; left: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--wb-muted);
+    background: rgba(0,0,0,0.45);
+    padding: 4px 6px 4px 9px;
+    border-radius: 8px;
+    z-index: 20;
+    max-width: 72%;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .hint.gone { display: none; }
+  .hintClose {
+    padding: 0;
+    width: 18px; height: 18px;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 11px;
+    background: #2c2f35;
+    flex-shrink: 0;
+  }
+`;
+
+const MARKUP = `
+  <div class="wb" id="wb">
+    <div class="canvasWrap" id="canvasWrap">
+      <canvas id="board"></canvas>
+      <div class="objectLayer" id="objectLayer"></div>
+    </div>
+
+    <div class="toolbar" id="toolbar">
+      <div class="group">
+        <div class="swatch active" style="background:#111111" data-color="#111111"></div>
+        <div class="swatch" style="background:#e03131" data-color="#e03131"></div>
+        <div class="swatch" style="background:#2f9e44" data-color="#2f9e44"></div>
+        <div class="swatch" style="background:#1971c2" data-color="#1971c2"></div>
+        <div class="swatch" style="background:#f08c00" data-color="#f08c00"></div>
+        <input type="color" id="customColor" value="#111111" title="Culoare personalizată">
+      </div>
+
+      <div class="group">
+        <span class="brushPreview" id="brushPreview" style="width:8px;height:8px;"></span>
+        <input type="range" id="sizeSlider" min="1" max="40" value="4">
+      </div>
+
+      <div class="group">
+        <button id="penBtn" class="active-tool" title="Creion">✏️ Creion</button>
+        <button id="eraserBtn" title="Radieră">🧹 Radieră</button>
+        <button id="textBtn" title="Text">🔤 Text</button>
+        <button id="panBtn" title="Mută vederea">✋ Mută</button>
+      </div>
+
+      <div class="group">
+        <button id="zoomOutBtn" title="Zoom −">−</button>
+        <span class="zoomLabel" id="zoomLabel">100%</span>
+        <button id="zoomInBtn" title="Zoom +">+</button>
+        <button id="zoomResetBtn" title="Înapoi la centru">⤢</button>
+        <button id="gridBtn" title="Grilă">▦</button>
+        <button id="fsBtn" title="Ecran complet">⛶</button>
+      </div>
+
+      <div class="group">
+        <button id="emojiToggle" title="Emoji">🙂</button>
+        <button id="undoBtn" title="Undo (Ctrl+Z)">↶</button>
+        <button id="clearBtn" title="Șterge tot">🗑️</button>
+        <button id="saveBtn" title="Salvează ca PNG">💾</button>
+      </div>
+    </div>
+
+    <div class="emojiPanel" id="emojiPanel"></div>
+
+    <div class="hint" id="hint">
+      <span>Pânză infinită · Mută: 2 degete / ✋ · Zoom: pinch sau Ctrl+scroll · Ascunde butoanele: H</span>
+      <button class="hintClose" id="hintClose" title="Ascunde permanent">✕</button>
+    </div>
+
+    <button class="chromeToggle" id="chromeToggle" title="Ascunde/arată butoanele (H)">✕</button>
+  </div>
+`;
+
+const EMOJIS = ['😀','😂','😍','😎','🤔','👍','👎','❤️','🔥','⭐','✅','❌',
+                '🎉','☀️','🌧️','❄️','⚡','💧','🏠','🚗','⏰','📌','💡','⚠️'];
+
+const DEFAULT_KEY = 'ha_whiteboard_v3';
+const LEGACY_KEY = 'ha_whiteboard_v2';
+
+/* ============================================================
+ *  Motorul whiteboard
+ * ============================================================ */
+function createWhiteboard(root, options) {
+  const opts = Object.assign({ storageKey: DEFAULT_KEY, grid: true, hideToolbar: false }, options || {});
+
+  root.innerHTML = '<style>' + STYLES + '</style>' + MARKUP;
+  const $ = (id) => root.getElementById(id);
+
+  const wb = $('wb');
+  const wrap = $('canvasWrap');
+  const canvas = $('board');
+  const ctx = canvas.getContext('2d');
+  const objectLayer = $('objectLayer');
+  const toolbar = $('toolbar');
+  const emojiPanel = $('emojiPanel');
+  const hint = $('hint');
+  const zoomLabel = $('zoomLabel');
+  const brushPreview = $('brushPreview');
+  const sizeSlider = $('sizeSlider');
+  const customColor = $('customColor');
+  const penBtn = $('penBtn'), eraserBtn = $('eraserBtn'), textBtn = $('textBtn'), panBtn = $('panBtn');
+  const gridBtn = $('gridBtn'), fsBtn = $('fsBtn');
+  const chromeToggle = $('chromeToggle');
+
+  let storageKey = opts.storageKey;
+  let uiKey = storageKey + '_ui';
+
+  let color = '#111111';
+  let size = 4;
+  let tool = 'pen';           // 'pen' | 'eraser' | 'text' | 'pan' | 'emoji'
+  let pendingEmoji = null;
+  let selectedObj = null;
+
+  // Panza este infinita: totul e tinut in coordonate "lume", nu in pixeli de ecran.
+  let strokes = [];           // [{ color, size, pts: [x,y,x,y,...] }]
+  let current = null;
+  let legacy = null;          // imagine importata din versiunea veche (PNG)
+  let showGrid = opts.grid !== false;
+
+  let zoom = 1, panX = 0, panY = 0;
+  const ZOOM_MIN = 0.05, ZOOM_MAX = 8;
+
+  const history = [];
+  const HISTORY_LIMIT = 40;
+
+  let vw = 0, vh = 0, dpr = 1;
+  let hovered = false;
+
+  // --- gestionarea listenerilor, ca sa putem face curat la destroy ---
+  const listeners = [];
+  function on(target, type, fn, o) {
+    target.addEventListener(type, fn, o);
+    listeners.push(() => target.removeEventListener(type, fn, o));
+  }
+
+  /* ---------- Stare UI (butoane ascunse / hint / grila) ---------- */
+  function readUI() {
+    try { return JSON.parse(localStorage.getItem(uiKey) || 'null'); } catch (err) { return null; }
+  }
+  function saveUI() {
+    try {
+      localStorage.setItem(uiKey, JSON.stringify({
+        chromeHidden: wb.classList.contains('chrome-hidden'),
+        hintClosed: hint.classList.contains('gone'),
+        showGrid: showGrid
+      }));
+    } catch (err) {}
+  }
+  function loadUI() {
+    const ui = readUI();
+    const hidden = ui ? !!ui.chromeHidden : !!opts.hideToolbar;
+    wb.classList.toggle('chrome-hidden', hidden);
+    if (ui && ui.hintClosed) hint.classList.add('gone');
+    if (ui && typeof ui.showGrid === 'boolean') showGrid = ui.showGrid;
+    syncChromeIcon();
+    gridBtn.classList.toggle('active-tool', showGrid);
+  }
+  function syncChromeIcon() {
+    chromeToggle.textContent = wb.classList.contains('chrome-hidden') ? '☰' : '✕';
+  }
+  function toggleChrome() {
+    wb.classList.toggle('chrome-hidden');
+    if (wb.classList.contains('chrome-hidden')) emojiPanel.classList.remove('open');
+    syncChromeIcon();
+    saveUI();
+  }
+  on(chromeToggle, 'click', toggleChrome);
+  on($('hintClose'), 'click', () => { hint.classList.add('gone'); saveUI(); });
+
+  // tastatura: doar cand cursorul e deasupra tablei (ca sa nu deranjam restul HA)
+  on(wb, 'mouseenter', () => { hovered = true; });
+  on(wb, 'mouseleave', () => { hovered = false; });
+  on(document, 'keydown', (e) => {
+    if (!hovered) return;
+    const t = e.composedPath ? e.composedPath()[0] : e.target;
+    if (t && (t.isContentEditable || t.tagName === 'INPUT')) return;
+    if (e.key === 'h' || e.key === 'H') { toggleChrome(); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+  });
+
+  /* ---------- Unelte ---------- */
+  EMOJIS.forEach(em => {
+    const b = document.createElement('button');
+    b.className = 'emoji-btn';
+    b.textContent = em;
+    b.addEventListener('click', () => {
+      pendingEmoji = em;
+      tool = 'emoji';
+      setActiveToolButton(null);
+      emojiPanel.classList.remove('open');
+    });
+    emojiPanel.appendChild(b);
+  });
+
+  function setActiveToolButton(activeBtn) {
+    [penBtn, eraserBtn, textBtn, panBtn].forEach(b => b.classList.remove('active-tool'));
+    if (activeBtn) activeBtn.classList.add('active-tool');
+  }
+  on(penBtn, 'click', () => { tool = 'pen'; setActiveToolButton(penBtn); deselect(); });
+  on(eraserBtn, 'click', () => { tool = 'eraser'; setActiveToolButton(eraserBtn); deselect(); });
+  on(textBtn, 'click', () => { tool = 'text'; setActiveToolButton(textBtn); deselect(); });
+  on(panBtn, 'click', () => { tool = 'pan'; setActiveToolButton(panBtn); deselect(); });
+  on($('emojiToggle'), 'click', () => emojiPanel.classList.toggle('open'));
+
+  root.querySelectorAll('.swatch').forEach(sw => {
+    on(sw, 'click', () => {
+      root.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+      color = sw.dataset.color;
+      if (selectedObj && selectedObj.dataset.type === 'text') { selectedObj.style.color = color; saveSoon(); }
+      else { tool = 'pen'; setActiveToolButton(penBtn); }
+    });
+  });
+  on(customColor, 'input', () => {
+    root.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+    color = customColor.value;
+    if (selectedObj && selectedObj.dataset.type === 'text') { selectedObj.style.color = color; saveSoon(); }
+    else { tool = 'pen'; setActiveToolButton(penBtn); }
+  });
+  on(sizeSlider, 'input', () => {
+    size = parseInt(sizeSlider.value, 10);
+    brushPreview.style.width = Math.max(4, size) + 'px';
+    brushPreview.style.height = Math.max(4, size) + 'px';
+  });
+  on(gridBtn, 'click', () => {
+    showGrid = !showGrid;
+    gridBtn.classList.toggle('active-tool', showGrid);
+    saveUI();
+    render();
+  });
+  on(fsBtn, 'click', () => {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (wb.requestFullscreen) wb.requestFullscreen();
+      else if (wb.webkitRequestFullscreen) wb.webkitRequestFullscreen();
+    } catch (err) {}
+  });
+
+  /* ---------- Canvas / randare ---------- */
+  function resizeCanvas() {
+    dpr = window.devicePixelRatio || 1;
+    const rect = wrap.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    vw = rect.width; vh = rect.height;
+    canvas.width = Math.round(vw * dpr);
+    canvas.height = Math.round(vh * dpr);
+    render();
+  }
+
+  function worldTransform() {
+    ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * panX, dpr * panY);
+  }
+
+  // Grila se deseneaza in coordonate de ecran (puncte mereu la fel de mari),
+  // dar e ancorata in lume, deci se misca odata cu panza.
+  function drawGrid() {
+    if (!showGrid) return;
+    let step = 40;
+    while (step * zoom < 22) step *= 2;
+    while (step * zoom > 90) step /= 2;
+    const sp = step * zoom;
+    const ox = ((panX % sp) + sp) % sp;
+    const oy = ((panY % sp) + sp) % sp;
+    const r = 2;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#ccd2dc';
+    ctx.beginPath();
+    for (let x = ox; x < vw; x += sp) {
+      for (let y = oy; y < vh; y += sp) {
+        ctx.rect(Math.round(x) - r / 2, Math.round(y) - r / 2, r, r);
+      }
+    }
+    ctx.fill();
+  }
+
+  function drawStroke(s) {
+    const p = s.pts;
+    if (p.length < 2) return;
+    ctx.strokeStyle = s.color;
+    ctx.lineWidth = s.size;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(p[0], p[1]);
+    if (p.length === 2) ctx.lineTo(p[0] + 0.01, p[1]);
+    else for (let i = 2; i < p.length; i += 2) ctx.lineTo(p[i], p[i + 1]);
+    ctx.stroke();
+  }
+
+  function render() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    drawGrid();
+    worldTransform();
+    if (legacy && legacy.img && legacy.img.complete) ctx.drawImage(legacy.img, 0, 0, legacy.w, legacy.h);
+    for (const s of strokes) drawStroke(s);
+    if (current) drawStroke(current);
+    zoomLabel.textContent = Math.round(zoom * 100) + '%';
+  }
+
+  let rafPending = false;
+  function scheduleRender() {
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(() => { rafPending = false; render(); });
+  }
+
+  function applyTransform() {
+    objectLayer.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
+    scheduleRender();
+  }
+
+  /* ---------- Zoom / pan ---------- */
+  function clampZoom(z) { return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)); }
+
+  function zoomAt(newZoom, mx, my) {
+    newZoom = clampZoom(newZoom);
+    const lx = (mx - panX) / zoom, ly = (my - panY) / zoom;
+    panX = mx - newZoom * lx;
+    panY = my - newZoom * ly;
+    zoom = newZoom;
+    applyTransform();
+    saveViewSoon();
+  }
+
+  on($('zoomInBtn'), 'click', () => zoomAt(zoom * 1.25, vw / 2, vh / 2));
+  on($('zoomOutBtn'), 'click', () => zoomAt(zoom / 1.25, vw / 2, vh / 2));
+  on($('zoomResetBtn'), 'click', () => { zoom = 1; panX = 0; panY = 0; applyTransform(); saveViewSoon(); });
+
+  on(wrap, 'wheel', (e) => {
+    e.preventDefault();
+    const r = wrap.getBoundingClientRect();
+    if (e.ctrlKey || e.metaKey) {
+      zoomAt(zoom * (e.deltaY < 0 ? 1.1 : 0.9), e.clientX - r.left, e.clientY - r.top);
+    } else {
+      if (e.shiftKey) panX -= e.deltaY;
+      else { panX -= e.deltaX; panY -= e.deltaY; }
+      applyTransform();
+      saveViewSoon();
+    }
+  }, { passive: false });
+
+  function toWorld(clientX, clientY) {
+    const r = wrap.getBoundingClientRect();
+    return { x: (clientX - r.left - panX) / zoom, y: (clientY - r.top - panY) / zoom };
+  }
+
+  /* ---------- Istoric ---------- */
+  function pushHistory() {
+    history.push({ strokes: strokes.slice(), objects: serializeObjects() });
+    if (history.length > HISTORY_LIMIT) history.shift();
+  }
+  function undo() {
+    const snap = history.pop();
+    if (!snap) return;
+    strokes = snap.strokes.slice();
+    current = null;
+    objectLayer.querySelectorAll('.obj').forEach(el => el.remove());
+    selectedObj = null;
+    snap.objects.forEach(buildObject);
+    render();
+    saveSoon();
+  }
+  on($('undoBtn'), 'click', undo);
+
+  /* ---------- Desen ---------- */
+  let drawing = false;
+
+  function startDraw(clientX, clientY) {
+    const p = toWorld(clientX, clientY);
+    pushHistory();
+    drawing = true;
+    if (tool === 'eraser') { eraseAt(p.x, p.y); return; }
+    current = { color: color, size: size, pts: [p.x, p.y] };
+  }
+
+  function moveDraw(clientX, clientY) {
+    if (!drawing) return;
+    const p = toWorld(clientX, clientY);
+    if (tool === 'eraser') { eraseAt(p.x, p.y); return; }
+    if (!current) return;
+    const n = current.pts.length;
+    const dx = p.x - current.pts[n - 2], dy = p.y - current.pts[n - 1];
+    const min = 0.6 / zoom;
+    if (dx * dx + dy * dy < min * min) return;
+    current.pts.push(p.x, p.y);
+    // desenam doar segmentul nou peste ce exista deja (rapid, fara redraw total)
+    worldTransform();
+    ctx.strokeStyle = current.color;
+    ctx.lineWidth = current.size;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(current.pts[n - 2], current.pts[n - 1]);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  }
+
+  function endDraw() {
+    if (!drawing) return;
+    drawing = false;
+    if (current) {
+      if (current.pts.length >= 2) strokes.push(current);
+      current = null;
+      render();
+    }
+    saveSoon();
+  }
+
+  function distToSeg(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const len2 = dx * dx + dy * dy;
+    let t = len2 ? ((px - x1) * dx + (py - y1) * dy) / len2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+  }
+
+  // Radiera taie traseele in bucati (fara "pete albe" pe panza infinita)
+  function eraseAt(wx, wy) {
+    const radius = Math.max(6, size * 2);
+    let changed = false;
+    const next = [];
+    for (const s of strokes) {
+      const lim = radius + s.size / 2;
+      const p = s.pts;
+      let hit = false;
+      for (let i = 0; i < p.length - 2; i += 2) {
+        if (distToSeg(wx, wy, p[i], p[i + 1], p[i + 2], p[i + 3]) <= lim) { hit = true; break; }
+      }
+      if (!hit && p.length === 2 && Math.hypot(wx - p[0], wy - p[1]) <= lim) hit = true;
+      if (!hit) { next.push(s); continue; }
+      changed = true;
+      let run = [];
+      for (let i = 0; i < p.length; i += 2) {
+        if (Math.hypot(wx - p[i], wy - p[i + 1]) > lim) run.push(p[i], p[i + 1]);
+        else { if (run.length >= 4) next.push({ color: s.color, size: s.size, pts: run }); run = []; }
+      }
+      if (run.length >= 4) next.push({ color: s.color, size: s.size, pts: run });
+    }
+    if (changed) { strokes = next; scheduleRender(); saveSoon(); }
+  }
+
+  /* ---------- Obiecte (emoji / text) ---------- */
+  function deselect() {
+    if (selectedObj) selectedObj.classList.remove('selected');
+    selectedObj = null;
+  }
+  function selectObj(el) {
+    if (selectedObj && selectedObj !== el) selectedObj.classList.remove('selected');
+    selectedObj = el;
+    el.classList.add('selected');
+  }
+  function objText(el) {
+    const t = el.querySelector('.txt');
+    return t ? t.textContent : '';
+  }
+
+  function buildObject(o) {
+    const el = document.createElement('div');
+    el.className = 'obj ' + o.type;
+    el.dataset.type = o.type;
+    el.style.left = o.left + 'px';
+    el.style.top = o.top + 'px';
+    el.style.width = o.width + 'px';
+    el.style.height = o.height + 'px';
+    el.style.fontSize = o.fontSize + 'px';
+    if (o.type === 'text') el.style.color = o.color || '#111';
+
+    const txt = document.createElement('span');
+    txt.className = 'txt';
+    txt.textContent = o.content || '';
+    if (o.type === 'text') txt.contentEditable = 'true';
+    el.appendChild(txt);
+
+    const handle = document.createElement('div');
+    handle.className = 'handle';
+    el.appendChild(handle);
+    const del = document.createElement('div');
+    del.className = 'del-handle';
+    del.textContent = '✕';
+    el.appendChild(del);
+
+    objectLayer.appendChild(el);
+    attachObjEvents(el, handle, del, txt);
+    return el;
+  }
+
+  function createObject(type, x, y, content) {
+    pushHistory();
+    const w = type === 'emoji' ? 44 : 130;
+    const h = type === 'emoji' ? 44 : 40;
+    const el = buildObject({
+      type: type,
+      left: x - w / 2, top: y - h / 2,
+      width: w, height: h,
+      fontSize: type === 'emoji' ? Math.round(h * 0.8) : 20,
+      color: color,
+      content: content || ''
+    });
+    selectObj(el);
+    if (type === 'text') requestAnimationFrame(() => focusText(el));
+    saveSoon();
+    return el;
+  }
+
+  function focusText(el) {
+    const txt = el.querySelector('.txt');
+    if (!txt) return;
+    txt.focus();
+    try {
+      const sel = root.getSelection ? root.getSelection() : document.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(txt);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (err) {}
+  }
+
+  // O singura stare de drag pentru toate obiectele (fara listeneri per obiect)
+  let drag = null;
+
+  function attachObjEvents(el, handle, del, txt) {
+    function down(e) {
+      const t = e.touches ? e.touches[0] : e;
+      selectObj(el);
+      drag = {
+        el: el,
+        mode: (e.target === handle) ? 'resize' : 'move',
+        sx: t.clientX, sy: t.clientY,
+        left: parseFloat(el.style.left), top: parseFloat(el.style.top),
+        w: parseFloat(el.style.width), h: parseFloat(el.style.height),
+        moved: false
+      };
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    el.addEventListener('mousedown', down);
+    el.addEventListener('touchstart', down, { passive: false });
+
+    del.addEventListener('mousedown', (e) => e.stopPropagation());
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      pushHistory();
+      el.remove();
+      if (selectedObj === el) selectedObj = null;
+      drag = null;
+      saveSoon();
+    });
+    el.addEventListener('dblclick', () => { if (el.dataset.type === 'text') focusText(el); });
+    if (txt) txt.addEventListener('blur', () => saveSoon());
+  }
+
+  function dragMove(clientX, clientY) {
+    if (!drag) return;
+    if (!drag.moved) { drag.moved = true; pushHistory(); }
+    const el = drag.el;
+    const dx = (clientX - drag.sx) / zoom;
+    const dy = (clientY - drag.sy) / zoom;
+    if (drag.mode === 'move') {
+      el.style.left = (drag.left + dx) + 'px';
+      el.style.top = (drag.top + dy) + 'px';
+    } else {
+      const nw = Math.max(20, drag.w + dx);
+      const nh = Math.max(20, drag.h + dy);
+      el.style.width = nw + 'px';
+      el.style.height = nh + 'px';
+      el.style.fontSize = (el.dataset.type === 'emoji'
+        ? Math.round(Math.min(nw, nh) * 0.8)
+        : Math.round(nh * 0.5)) + 'px';
+    }
+  }
+  function dragEnd() {
+    if (!drag) return;
+    if (drag.moved) saveSoon();
+    drag = null;
+  }
+
+  /* ---------- Rutarea pointerului ---------- */
+  let panning = false, panStartX = 0, panStartY = 0, panOrigX = 0, panOrigY = 0;
+  const activeTouches = new Map();
+  let pinchStartDist = 0, pinchStartZoom = 1, pinchWorld = null;
+
+  const midpoint = (a, b) => ({ x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 });
+  const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+
+  on(canvas, 'mousedown', (e) => {
+    if (tool === 'pan' || e.button === 1 || e.button === 2) {
+      panning = true;
+      panStartX = e.clientX; panStartY = e.clientY;
+      panOrigX = panX; panOrigY = panY;
+      e.preventDefault();
+      return;
+    }
+    if (tool === 'emoji' && pendingEmoji) {
+      const p = toWorld(e.clientX, e.clientY);
+      createObject('emoji', p.x, p.y, pendingEmoji);
+      return;
+    }
+    if (tool === 'text') {
+      const p = toWorld(e.clientX, e.clientY);
+      createObject('text', p.x, p.y, '');
+      return;
+    }
+    deselect();
+    startDraw(e.clientX, e.clientY);
+  });
+  on(canvas, 'contextmenu', (e) => e.preventDefault());
+
+  on(document, 'mousemove', (e) => {
+    if (drag) { dragMove(e.clientX, e.clientY); return; }
+    if (panning) {
+      panX = panOrigX + (e.clientX - panStartX);
+      panY = panOrigY + (e.clientY - panStartY);
+      applyTransform();
+      return;
+    }
+    if (drawing) moveDraw(e.clientX, e.clientY);
+  });
+  on(document, 'mouseup', () => {
+    if (drag) { dragEnd(); return; }
+    if (panning) { panning = false; saveViewSoon(); }
+    endDraw();
+  });
+
+  on(canvas, 'touchstart', (e) => {
+    for (const t of e.changedTouches) activeTouches.set(t.identifier, t);
+    if (activeTouches.size === 2) {
+      // doua degete = mutare + zoom simultan, indiferent de unealta
+      drawing = false; current = null; panning = false;
+      const pts = Array.from(activeTouches.values());
+      const r = wrap.getBoundingClientRect();
+      const mid = midpoint(pts[0], pts[1]);
+      pinchStartDist = dist(pts[0], pts[1]) || 1;
+      pinchStartZoom = zoom;
+      pinchWorld = { x: (mid.x - r.left - panX) / zoom, y: (mid.y - r.top - panY) / zoom };
+      render();
+      e.preventDefault();
+      return;
+    }
+    if (activeTouches.size === 1) {
+      const t = e.touches[0];
+      if (tool === 'pan') {
+        panning = true; panStartX = t.clientX; panStartY = t.clientY;
+        panOrigX = panX; panOrigY = panY;
+      } else if (tool === 'emoji' && pendingEmoji) {
+        const p = toWorld(t.clientX, t.clientY);
+        createObject('emoji', p.x, p.y, pendingEmoji);
+      } else if (tool === 'text') {
+        const p = toWorld(t.clientX, t.clientY);
+        createObject('text', p.x, p.y, '');
+      } else {
+        deselect();
+        startDraw(t.clientX, t.clientY);
+      }
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  on(canvas, 'touchmove', (e) => {
+    for (const t of e.changedTouches) if (activeTouches.has(t.identifier)) activeTouches.set(t.identifier, t);
+    if (activeTouches.size === 2 && pinchWorld) {
+      const pts = Array.from(activeTouches.values());
+      const r = wrap.getBoundingClientRect();
+      const mid = midpoint(pts[0], pts[1]);
+      zoom = clampZoom(pinchStartZoom * (dist(pts[0], pts[1]) / pinchStartDist));
+      panX = (mid.x - r.left) - pinchWorld.x * zoom;
+      panY = (mid.y - r.top) - pinchWorld.y * zoom;
+      applyTransform();
+      e.preventDefault();
+      return;
+    }
+    if (panning) {
+      const t = e.touches[0];
+      panX = panOrigX + (t.clientX - panStartX);
+      panY = panOrigY + (t.clientY - panStartY);
+      applyTransform();
+    } else if (drawing) {
+      moveDraw(e.touches[0].clientX, e.touches[0].clientY);
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  on(canvas, 'touchend', (e) => {
+    for (const t of e.changedTouches) activeTouches.delete(t.identifier);
+    if (activeTouches.size < 2) { pinchStartDist = 0; pinchWorld = null; saveViewSoon(); }
+    if (activeTouches.size === 0) {
+      if (panning) { panning = false; saveViewSoon(); }
+      endDraw();
+    }
+  });
+
+  // mutarea/redimensionarea obiectelor pe touch (obiectele opresc propagarea spre canvas)
+  on(document, 'touchmove', (e) => {
+    if (!drag) return;
+    const t = e.touches[0];
+    if (!t) return;
+    dragMove(t.clientX, t.clientY);
+    e.preventDefault();
+  }, { passive: false });
+  on(document, 'touchend', () => { if (drag) dragEnd(); });
+
+  /* ---------- Sterge / export ---------- */
+  on($('clearBtn'), 'click', () => {
+    pushHistory();
+    strokes = [];
+    current = null;
+    legacy = null;
+    objectLayer.querySelectorAll('.obj').forEach(el => el.remove());
+    selectedObj = null;
+    render();
+    saveSoon();
+  });
+
+  function contentBounds() {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const s of strokes) {
+      const m = s.size / 2;
+      for (let i = 0; i < s.pts.length; i += 2) {
+        if (s.pts[i] - m < minX) minX = s.pts[i] - m;
+        if (s.pts[i] + m > maxX) maxX = s.pts[i] + m;
+        if (s.pts[i + 1] - m < minY) minY = s.pts[i + 1] - m;
+        if (s.pts[i + 1] + m > maxY) maxY = s.pts[i + 1] + m;
+      }
+    }
+    objectLayer.querySelectorAll('.obj').forEach(el => {
+      const x = parseFloat(el.style.left), y = parseFloat(el.style.top);
+      const w = parseFloat(el.style.width), h = parseFloat(el.style.height);
+      minX = Math.min(minX, x); minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x + w); maxY = Math.max(maxY, y + h);
+    });
+    if (legacy) {
+      minX = Math.min(minX, 0); minY = Math.min(minY, 0);
+      maxX = Math.max(maxX, legacy.w); maxY = Math.max(maxY, legacy.h);
+    }
+    if (!isFinite(minX)) return { x: -panX / zoom, y: -panY / zoom, w: vw / zoom, h: vh / zoom };
+    const pad = 40;
+    return { x: minX - pad, y: minY - pad, w: (maxX - minX) + pad * 2, h: (maxY - minY) + pad * 2 };
+  }
+
+  on($('saveBtn'), 'click', () => {
+    const b = contentBounds();
+    const scale = Math.min(2, Math.max(1, 2400 / Math.max(b.w, b.h)));
+    const tmp = document.createElement('canvas');
+    tmp.width = Math.max(1, Math.round(b.w * scale));
+    tmp.height = Math.max(1, Math.round(b.h * scale));
+    const t = tmp.getContext('2d');
+    t.fillStyle = '#ffffff';
+    t.fillRect(0, 0, tmp.width, tmp.height);
+    t.setTransform(scale, 0, 0, scale, -b.x * scale, -b.y * scale);
+    if (legacy && legacy.img) t.drawImage(legacy.img, 0, 0, legacy.w, legacy.h);
+    for (const s of strokes) {
+      if (s.pts.length < 2) continue;
+      t.strokeStyle = s.color; t.lineWidth = s.size;
+      t.lineCap = 'round'; t.lineJoin = 'round';
+      t.beginPath();
+      t.moveTo(s.pts[0], s.pts[1]);
+      for (let i = 2; i < s.pts.length; i += 2) t.lineTo(s.pts[i], s.pts[i + 1]);
+      t.stroke();
+    }
+    objectLayer.querySelectorAll('.obj').forEach(el => {
+      const x = parseFloat(el.style.left), y = parseFloat(el.style.top);
+      const w = parseFloat(el.style.width), h = parseFloat(el.style.height);
+      const fs = parseFloat(el.style.fontSize) || 20;
+      if (el.dataset.type === 'emoji') {
+        t.font = fs + 'px sans-serif';
+        t.textAlign = 'center'; t.textBaseline = 'middle';
+        t.fillStyle = '#111';
+        t.fillText(objText(el), x + w / 2, y + h / 2);
+      } else {
+        t.font = fs + 'px -apple-system, sans-serif';
+        t.fillStyle = el.style.color || '#111';
+        t.textAlign = 'center'; t.textBaseline = 'middle';
+        t.fillText(objText(el), x + w / 2, y + h / 2);
+      }
+    });
+    const link = document.createElement('a');
+    link.download = 'whiteboard-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.png';
+    link.href = tmp.toDataURL('image/png');
+    link.click();
+  });
+
+  /* ---------- Persistenta ---------- */
+  function serializeObjects() {
+    return Array.from(objectLayer.querySelectorAll('.obj')).map(el => ({
+      type: el.dataset.type,
+      left: parseFloat(el.style.left),
+      top: parseFloat(el.style.top),
+      width: parseFloat(el.style.width),
+      height: parseFloat(el.style.height),
+      fontSize: parseFloat(el.style.fontSize) || 20,
+      color: el.style.color || null,
+      content: objText(el)
+    }));
+  }
+
+  let saveTimer = null;
+  function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 400); }
+  function saveViewSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 800); }
+  function doSave() {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({
+        strokes: strokes.map(s => ({ c: s.color, w: s.size, p: s.pts.map(n => Math.round(n * 10) / 10) })),
+        objects: serializeObjects(),
+        view: { zoom: zoom, panX: panX, panY: panY },
+        legacy: legacy ? { src: legacy.src, w: legacy.w, h: legacy.h } : null
+      }));
+    } catch (err) {}
+  }
+
+  function loadLegacyImage(src, w, h) {
+    const img = new Image();
+    img.onload = () => {
+      legacy = {
+        src: src,
+        w: w || img.naturalWidth / (window.devicePixelRatio || 1),
+        h: h || img.naturalHeight / (window.devicePixelRatio || 1),
+        img: img
+      };
+      render();
+    };
+    img.src = src;
+  }
+
+  function restore() {
+    strokes = [];
+    legacy = null;
+    objectLayer.querySelectorAll('.obj').forEach(el => el.remove());
+    selectedObj = null;
+    history.length = 0;
+    zoom = 1; panX = 0; panY = 0;
+
+    let data = null;
+    try { data = JSON.parse(localStorage.getItem(storageKey) || 'null'); } catch (err) {}
+
+    if (!data) {
+      // migrare din versiunea veche (panza fixa, salvata ca PNG)
+      if (storageKey === DEFAULT_KEY) {
+        let old = null;
+        try { old = JSON.parse(localStorage.getItem(LEGACY_KEY) || 'null'); } catch (err) {}
+        if (old) {
+          if (old.png) loadLegacyImage(old.png, null, null);
+          (old.objects || []).forEach(o => buildObject({
+            type: o.type,
+            left: parseFloat(o.left) || 0,
+            top: parseFloat(o.top) || 0,
+            width: parseFloat(o.width) || 44,
+            height: parseFloat(o.height) || 44,
+            fontSize: parseFloat(o.fontSize) || 20,
+            color: o.color,
+            content: o.content
+          }));
+          saveSoon();
+        }
+      }
+      return;
+    }
+
+    strokes = (data.strokes || []).map(s => ({ color: s.c, size: s.w, pts: s.p }));
+    (data.objects || []).forEach(buildObject);
+    if (data.legacy && data.legacy.src) loadLegacyImage(data.legacy.src, data.legacy.w, data.legacy.h);
+    if (data.view) {
+      zoom = clampZoom(data.view.zoom || 1);
+      panX = data.view.panX || 0;
+      panY = data.view.panY || 0;
+    }
+  }
+
+  /* ---------- Start ---------- */
+  const ro = ('ResizeObserver' in window) ? new ResizeObserver(() => resizeCanvas()) : null;
+  if (ro) ro.observe(wrap); else on(window, 'resize', resizeCanvas);
+  on(document, 'fullscreenchange', () => requestAnimationFrame(resizeCanvas));
+
+  loadUI();
+  restore();
+  resizeCanvas();
+  applyTransform();
+  brushPreview.style.width = size + 'px';
+  brushPreview.style.height = size + 'px';
+
+  return {
+    setOptions(next) {
+      next = next || {};
+      if (next.storageKey && next.storageKey !== storageKey) {
+        storageKey = next.storageKey;
+        uiKey = storageKey + '_ui';
+        opts.storageKey = storageKey;
+        loadUI();
+        restore();
+        applyTransform();
+        render();
+      }
+      if (typeof next.hideToolbar === 'boolean' && !readUI()) {
+        wb.classList.toggle('chrome-hidden', next.hideToolbar);
+        syncChromeIcon();
+      }
+      if (typeof next.grid === 'boolean' && !readUI()) {
+        showGrid = next.grid;
+        gridBtn.classList.toggle('active-tool', showGrid);
+        render();
+      }
+    },
+    refresh: resizeCanvas,
+    destroy() {
+      clearTimeout(saveTimer);
+      if (ro) ro.disconnect();
+      listeners.forEach(off => off());
+      listeners.length = 0;
+    }
+  };
+}
+
+/* ============================================================
+ *  <whiteboard-board> — tabla ca element de sine statator
+ * ============================================================ */
+class WhiteboardBoard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+    this._opts = {};
+  }
+  connectedCallback() {
+    if (this._api) { this._api.refresh(); return; }
+    // asteptam un microtask: parintele poate seta `options` imediat dupa inserare
+    queueMicrotask(() => {
+      if (!this.isConnected || this._api) return;
+      this._api = createWhiteboard(this.shadowRoot, this._opts);
+    });
+  }
+  disconnectedCallback() {
+    // Lovelace muta cardurile prin DOM; nu distrugem imediat, doar daca ramane detasat.
+    setTimeout(() => {
+      if (!this.isConnected && this._api) { this._api.destroy(); this._api = null; }
+    }, 1000);
+  }
+  set options(o) {
+    this._opts = Object.assign({}, this._opts, o || {});
+    if (this._api) this._api.setOptions(this._opts);
+  }
+  get options() { return this._opts; }
+}
+if (!customElements.get('whiteboard-board')) customElements.define('whiteboard-board', WhiteboardBoard);
+
+/* ============================================================
+ *  <whiteboard-card> — cardul Lovelace
+ * ============================================================ */
+class WhiteboardCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+  }
+
+  static getStubConfig() {
+    return { type: 'custom:whiteboard-card', height: 420, grid: true };
+  }
+  static getConfigElement() {
+    return document.createElement('whiteboard-card-editor');
+  }
+
+  setConfig(config) {
+    this._config = Object.assign({
+      height: 420,
+      grid: true,
+      hide_toolbar: false,
+      storage_key: DEFAULT_KEY
+    }, config || {});
+    this._render();
+  }
+
+  set hass(_hass) { /* cardul nu depinde de starea HA */ }
+
+  getCardSize() {
+    const h = parseInt(this._config && this._config.height, 10) || 420;
+    return Math.max(3, Math.ceil(h / 50));
+  }
+
+  _render() {
+    const c = this._config;
+    const height = (typeof c.height === 'number') ? c.height + 'px' : String(c.height || '420px');
+
+    if (!this._built) {
+      this.shadowRoot.innerHTML = `
+        <style>
+          ha-card { display: block; overflow: hidden; }
+          .header {
+            padding: 12px 16px 0;
+            font-size: var(--ha-card-header-font-size, 24px);
+            color: var(--ha-card-header-color, var(--primary-text-color));
+            font-family: var(--ha-card-header-font-family, inherit);
+          }
+          .body { padding: 8px; }
+          .board-wrap {
+            position: relative;
+            width: 100%;
+            overflow: hidden;
+            border-radius: var(--ha-card-border-radius, 10px);
+            border: 1px solid var(--divider-color, rgba(0,0,0,.12));
+          }
+        </style>
+        <ha-card>
+          <div class="header" id="header" style="display:none"></div>
+          <div class="body">
+            <div class="board-wrap" id="wrap">
+              <whiteboard-board id="board"></whiteboard-board>
+            </div>
+          </div>
+        </ha-card>
+      `;
+      this._built = true;
+    }
+
+    const header = this.shadowRoot.getElementById('header');
+    header.textContent = c.title || '';
+    header.style.display = c.title ? '' : 'none';
+
+    this.shadowRoot.getElementById('wrap').style.height = height;
+
+    const board = this.shadowRoot.getElementById('board');
+    board.options = {
+      storageKey: c.storage_key || DEFAULT_KEY,
+      grid: c.grid !== false,
+      hideToolbar: !!c.hide_toolbar
+    };
+  }
+}
+if (!customElements.get('whiteboard-card')) customElements.define('whiteboard-card', WhiteboardCard);
+
+/* ============================================================
+ *  Editor vizual simplu pentru card
+ * ============================================================ */
+class WhiteboardCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+  }
+  setConfig(config) {
+    this._config = Object.assign({}, config);
+    this._render();
+  }
+  _emit() {
+    this.dispatchEvent(new CustomEvent('config-changed', {
+      detail: { config: this._config },
+      bubbles: true,
+      composed: true
+    }));
+  }
+  _render() {
+    const c = this._config || {};
+    if (!this._built) {
+      this.shadowRoot.innerHTML = `
+        <style>
+          .row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+          label { font-size: 13px; color: var(--secondary-text-color, #666); }
+          input[type="text"], input[type="number"] {
+            padding: 8px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--divider-color, #ccc);
+            background: var(--card-background-color, #fff);
+            color: var(--primary-text-color, #111);
+            font-size: 14px;
+          }
+          .check { flex-direction: row; align-items: center; gap: 8px; }
+          .hintline { font-size: 12px; color: var(--secondary-text-color, #888); margin-top: -6px; }
+        </style>
+        <div class="row">
+          <label for="title">Titlu (gol = fără titlu)</label>
+          <input type="text" id="title">
+        </div>
+        <div class="row">
+          <label for="height">Înălțime (px)</label>
+          <input type="number" id="height" min="150" max="2000" step="10">
+        </div>
+        <div class="row">
+          <label for="storage_key">Cheie stocare</label>
+          <input type="text" id="storage_key">
+          <div class="hintline">Chei diferite = table diferite (ex. una pentru bucătărie, alta pentru birou).</div>
+        </div>
+        <div class="row check">
+          <input type="checkbox" id="grid">
+          <label for="grid">Arată grila de puncte</label>
+        </div>
+        <div class="row check">
+          <input type="checkbox" id="hide_toolbar">
+          <label for="hide_toolbar">Pornește cu butoanele ascunse</label>
+        </div>
+      `;
+      this._built = true;
+
+      const bind = (id, key, kind) => {
+        const el = this.shadowRoot.getElementById(id);
+        el.addEventListener(kind === 'bool' ? 'change' : 'input', () => {
+          const cfg = Object.assign({}, this._config);
+          if (kind === 'bool') cfg[key] = el.checked;
+          else if (kind === 'num') cfg[key] = parseInt(el.value, 10) || 420;
+          else { if (el.value) cfg[key] = el.value; else delete cfg[key]; }
+          this._config = cfg;
+          this._emit();
+        });
+      };
+      bind('title', 'title', 'str');
+      bind('height', 'height', 'num');
+      bind('storage_key', 'storage_key', 'str');
+      bind('grid', 'grid', 'bool');
+      bind('hide_toolbar', 'hide_toolbar', 'bool');
+    }
+
+    this.shadowRoot.getElementById('title').value = c.title || '';
+    this.shadowRoot.getElementById('height').value = parseInt(c.height, 10) || 420;
+    this.shadowRoot.getElementById('storage_key').value = c.storage_key || '';
+    this.shadowRoot.getElementById('grid').checked = c.grid !== false;
+    this.shadowRoot.getElementById('hide_toolbar').checked = !!c.hide_toolbar;
+  }
+}
+if (!customElements.get('whiteboard-card-editor')) {
+  customElements.define('whiteboard-card-editor', WhiteboardCardEditor);
+}
+
+/* Inregistrare in lista de carduri din UI-ul HA */
+window.customCards = window.customCards || [];
+if (!window.customCards.some(c => c.type === 'whiteboard-card')) {
+  window.customCards.push({
+    type: 'whiteboard-card',
+    name: 'Whiteboard',
+    description: 'Tablă de desen cu pânză infinită, emoji și text.',
+    preview: false,
+    documentationURL: 'https://github.com/'
+  });
+}
+
+console.info('%c WHITEBOARD-CARD %c ' + VERSION + ' ', 'background:#5eb1ff;color:#10131a;font-weight:700', '');
+
+export { createWhiteboard };

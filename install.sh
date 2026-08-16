@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Instaleaza whiteboard.html in folderul www al Home Assistant
+# Instaleaza whiteboard-ul in folderul www al Home Assistant
 # Ruleaza acest script DIRECT PE MASINA UNDE RULEAZA HOME ASSISTANT (ex: Jetson Nano)
 #
 # Foloseste: ./install.sh /calea/catre/config/ha
@@ -9,6 +9,7 @@ set -e
 
 HA_CONFIG_DIR="${1:-$HOME/homeassistant}"
 WWW_DIR="$HA_CONFIG_DIR/www"
+SRC_DIR="$(dirname "$0")/www"
 
 if [ ! -d "$HA_CONFIG_DIR" ]; then
   echo "Nu gasesc folderul de config HA la: $HA_CONFIG_DIR"
@@ -17,16 +18,33 @@ if [ ! -d "$HA_CONFIG_DIR" ]; then
 fi
 
 mkdir -p "$WWW_DIR"
-cp "$(dirname "$0")/www/whiteboard.html" "$WWW_DIR/whiteboard.html"
+cp "$SRC_DIR/whiteboard-card.js" "$WWW_DIR/whiteboard-card.js"
+cp "$SRC_DIR/whiteboard.html"    "$WWW_DIR/whiteboard.html"
 
 echo ""
-echo "Whiteboard copiat cu succes in: $WWW_DIR/whiteboard.html"
-echo "Va fi disponibil (fara restart HA) la: http://<ip-ha>:8123/local/whiteboard.html"
+echo "Copiat cu succes in: $WWW_DIR"
+echo "  - whiteboard-card.js  (cardul Lovelace)"
+echo "  - whiteboard.html     (pagina de sine statatoare / varianta iframe)"
 echo ""
-echo "Adauga acest card intr-un dashboard HA (Edit Dashboard -> Add Card -> Show code editor):"
+echo "== Varianta 1 (recomandata): custom card =="
 echo ""
-echo "type: iframe"
-echo "url: /local/whiteboard.html"
-echo "title: Whiteboard"
-echo "aspect_ratio: 90%"
+echo "1. Adauga resursa o singura data:"
+echo "   Settings -> Dashboards -> (meniul din dreapta sus) Resources -> Add resource"
+echo "     URL:  /local/whiteboard-card.js"
+echo "     Type: JavaScript Module"
+echo "   Apoi reincarca pagina cu Ctrl+F5 (sau goleste cache-ul pe tableta)."
+echo ""
+echo "2. In dashboard: Add Card -> cauta \"Whiteboard\", sau Show code editor:"
+echo ""
+echo "   type: custom:whiteboard-card"
+echo "   height: 420"
+echo "   title: Whiteboard"
+echo ""
+echo "== Varianta 2: iframe (fara resurse de adaugat) =="
+echo ""
+echo "   type: iframe"
+echo "   url: /local/whiteboard.html"
+echo "   aspect_ratio: 90%"
+echo ""
+echo "Nu e nevoie de restart HA — folderul www e servit automat la /local/..."
 echo ""
