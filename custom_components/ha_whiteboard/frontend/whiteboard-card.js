@@ -636,8 +636,17 @@ function createWhiteboard(root, options) {
   on($('hintClose'), 'click', () => { hint.classList.add('gone'); saveUI(); });
 
   // tastatura: doar cand cursorul e deasupra tablei (ca sa nu deranjam restul HA)
+  // "hovered" decide daca tastele si lipirea din clipboard sunt pentru noi.
+  // Pe touch nu exista mouseenter, deci luam in calcul si atingerea tablei:
+  // altfel, pe telefon si tableta, Ctrl+V si tastele nu ar functiona niciodata.
   on(wb, 'mouseenter', () => { hovered = true; });
   on(wb, 'mouseleave', () => { hovered = false; });
+  on(wb, 'pointerdown', () => { hovered = true; });
+  on(wb, 'touchstart', () => { hovered = true; }, { passive: true });
+  on(document, 'pointerdown', (e) => {
+    const path = e.composedPath ? e.composedPath() : [];
+    if (path.indexOf(wb) < 0) hovered = false;
+  }, true);
   on(document, 'keydown', (e) => {
     if (!hovered) return;
     const t = e.composedPath ? e.composedPath()[0] : e.target;
