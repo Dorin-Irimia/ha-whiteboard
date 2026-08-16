@@ -8,7 +8,7 @@
  * Fara dependinte externe. Tot desenul e vectorial, pe o panza infinita.
  */
 
-const VERSION = '2.0';
+const VERSION = '2.1';
 
 const STYLES = `
   :host {
@@ -207,6 +207,28 @@ const STYLES = `
     transition: opacity .18s ease, transform .18s ease;
   }
   .hint.gone { display: none; }
+
+  .toast {
+    position: absolute;
+    left: 50%;
+    bottom: 16px;
+    transform: translate(-50%, 12px);
+    max-width: 80%;
+    padding: 8px 14px;
+    background: var(--wb-panel);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--wb-panel-border);
+    border-radius: 10px;
+    color: var(--wb-ink);
+    font-size: 12.5px;
+    text-align: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s ease, transform .2s ease;
+    z-index: 40;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
   .hintClose {
     padding: 0;
     width: 18px; height: 18px;
@@ -978,11 +1000,60 @@ function createWhiteboard(root, options) {
         t.fillText(objText(el), x + w / 2, y + h / 2);
       }
     });
-    const link = document.createElement('a');
-    link.download = 'whiteboard-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.png';
-    link.href = tmp.toDataURL('image/png');
-    link.click();
+    const name = 'whiteboard-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.png';
+    exportPng(tmp.toDataURL('image/png'), name);
   });
+
+  // Exportul difera dupa context: in cardul iframe al HA descarcarile sunt blocate
+  // (sandbox-ul nu are allow-downloads), asa ca deschidem imaginea intr-o fila noua.
+  function exportPng(url, name) {
+    let inFrame = false;
+    try { inFrame = window.self !== window.top; } catch (err) { inFrame = true; }
+
+    if (inFrame) {
+      const w = window.open('', '_blank');
+      if (!w) { flashSave('⚠️', 'Permite ferestrele pop-up ca să poți exporta imaginea'); return; }
+      w.document.write(
+        '<!DOCTYPE html><title>' + name + '</title>' +
+        '<body style="margin:0;background:#1b1d21;display:flex;align-items:center;justify-content:center">' +
+        '<img src="' + url + '" alt="' + name + '" style="max-width:100%;max-height:100vh;background:#fff">'
+      );
+      w.document.close();
+      flashSave('✓', 'Imaginea s-a deschis într-o filă nouă — salveaz-o de acolo');
+      return;
+    }
+
+    const link = document.createElement('a');
+    link.download = name;
+    link.href = url;
+    link.click();
+    flashSave('✓', '');
+  }
+
+  let flashTimer = null;
+  function flashSave(mark, message) {
+    const btn = $('saveBtn');
+    const original = '💾';
+    btn.textContent = mark;
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => { btn.textContent = original; }, 1600);
+    if (message) toast(message);
+  }
+
+  let toastTimer = null;
+  function toast(message) {
+    let el = root.getElementById('toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'toast';
+      el.id = 'toast';
+      wb.appendChild(el);
+    }
+    el.textContent = message;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 4000);
+  }
 
   /* ---------- Persistenta ---------- */
   function serializeObjects() {

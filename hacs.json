@@ -1,0 +1,6 @@
+{
+  "name": "Whiteboard Card",
+  "filename": "whiteboard-card.js",
+  "render_readme": true,
+  "homeassistant": "2023.1.0"
+}

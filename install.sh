@@ -9,7 +9,7 @@ set -e
 
 HA_CONFIG_DIR="${1:-$HOME/homeassistant}"
 WWW_DIR="$HA_CONFIG_DIR/www"
-SRC_DIR="$(dirname "$0")/www"
+SRC_DIR="$(dirname "$0")/dist"
 
 if [ ! -d "$HA_CONFIG_DIR" ]; then
   echo "Nu gasesc folderul de config HA la: $HA_CONFIG_DIR"
