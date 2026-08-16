@@ -8,7 +8,7 @@
  * Fara dependinte externe. Tot desenul e vectorial, pe o panza infinita.
  */
 
-const VERSION = '2.4.4';
+const VERSION = '2.4.5';
 
 const STYLES = `
   :host {
@@ -329,7 +329,7 @@ const MARKUP = `
       </div>
     </div>
 
-    <input type="file" id="fileInput" class="fileInput" accept="image/*" multiple>
+    <input type="file" id="fileInput" class="fileInput" accept="image/*">
     <div class="dropHint" id="dropHint" data-i18n="dropHere"></div>
 
     <div class="emojiPanel" id="emojiPanel"></div>
@@ -1116,11 +1116,34 @@ function createWhiteboard(root, options) {
 
   const fileInput = $('fileInput');
   on($('imageBtn'), 'click', () => fileInput.click());
-  on(fileInput, 'change', () => {
+
+  // Pe unele webview-uri Android evenimentul "change" nu mai ajunge dupa ce
+  // selectorul de fisiere se inchide, desi fisierul chiar e in input. Verificam
+  // deci si cand pagina redevine vizibila, si ne ferim sa punem aceeasi poza de
+  // doua ori printr-o semnatura a selectiei.
+  let lastPicked = '';
+  let clearTimer = null;
+  function handlePickedFiles() {
+    const files = fileInput.files;
+    if (!files || !files.length) return;
+    const token = Array.from(files)
+      .map(f => f.name + ':' + f.size + ':' + (f.lastModified || 0)).join('|');
+    if (token === lastPicked) return;
+    lastPicked = token;
     const c = viewCenter();
-    addImageFiles(fileInput.files, c.x, c.y);
-    fileInput.value = '';
+    addImageFiles(files, c.x, c.y);
+    clearTimeout(clearTimer);
+    clearTimer = setTimeout(() => {
+      try { fileInput.value = ''; } catch (err) {}
+      lastPicked = '';
+    }, 2000);
+  }
+  on(fileInput, 'change', handlePickedFiles);
+  on(fileInput, 'input', handlePickedFiles);
+  on(document, 'visibilitychange', () => {
+    if (!document.hidden) setTimeout(handlePickedFiles, 300);
   });
+  on(window, 'focus', () => setTimeout(handlePickedFiles, 300));
 
   // Lipire din clipboard (Ctrl+V / cmd+V), doar cand tabla e sub cursor
   on(document, 'paste', (e) => {
