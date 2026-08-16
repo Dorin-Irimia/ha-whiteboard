@@ -8,7 +8,7 @@
  * Fara dependinte externe. Tot desenul e vectorial, pe o panza infinita.
  */
 
-const VERSION = '2.3.0';
+const VERSION = '2.3.1';
 
 const STYLES = `
   :host {
@@ -320,6 +320,7 @@ const MARKUP = `
       </div>
 
       <div class="group">
+        <button id="syncBadge" data-i18n-title="syncLocal">🖥️</button>
         <button id="emojiToggle" data-i18n-title="emoji">🙂</button>
         <button id="imageBtn" data-i18n-title="image">🖼️</button>
         <button id="undoBtn" data-i18n-title="undo">↶</button>
@@ -362,7 +363,9 @@ const I18N = {
     popupBlocked: 'Allow pop-ups to export the image',
     readFailed: 'Could not read the file',
     notAnImage: 'That file is not a valid image',
-    storageFull: 'Storage is full — remove a few images or clear the board'
+    storageFull: 'Storage is full — remove a few images or clear the board',
+    syncShared: 'Shared board — everyone on this Home Assistant sees it',
+    syncLocal: 'Local board — only this browser. Install the Whiteboard integration to share it.'
   },
   ro: {
     pen: 'Creion', eraser: 'Radieră', text: 'Text', pan: 'Mută',
@@ -378,7 +381,9 @@ const I18N = {
     popupBlocked: 'Permite ferestrele pop-up ca să poți exporta imaginea',
     readFailed: 'Nu am putut citi fișierul',
     notAnImage: 'Fișierul nu este o imagine validă',
-    storageFull: 'Spațiul de stocare e plin — șterge câteva imagini sau golește tabla'
+    storageFull: 'Spațiul de stocare e plin — șterge câteva imagini sau golește tabla',
+    syncShared: 'Tablă partajată — o văd toți din acest Home Assistant',
+    syncLocal: 'Tablă locală — doar în acest browser. Instalează integrarea Whiteboard ca să fie partajată.'
   },
   de: {
     pen: 'Stift', eraser: 'Radierer', text: 'Text', pan: 'Verschieben',
@@ -394,7 +399,9 @@ const I18N = {
     popupBlocked: 'Pop-ups erlauben, um das Bild zu exportieren',
     readFailed: 'Datei konnte nicht gelesen werden',
     notAnImage: 'Die Datei ist kein gültiges Bild',
-    storageFull: 'Speicher voll — entferne einige Bilder oder leere die Tafel'
+    storageFull: 'Speicher voll — entferne einige Bilder oder leere die Tafel',
+    syncShared: 'Geteilte Tafel — alle in diesem Home Assistant sehen sie',
+    syncLocal: 'Lokale Tafel — nur in diesem Browser. Installiere die Whiteboard-Integration zum Teilen.'
   },
   fr: {
     pen: 'Crayon', eraser: 'Gomme', text: 'Texte', pan: 'Déplacer',
@@ -410,7 +417,9 @@ const I18N = {
     popupBlocked: 'Autorisez les pop-ups pour exporter l\'image',
     readFailed: 'Impossible de lire le fichier',
     notAnImage: 'Ce fichier n\'est pas une image valide',
-    storageFull: 'Stockage plein — supprimez des images ou videz le tableau'
+    storageFull: 'Stockage plein — supprimez des images ou videz le tableau',
+    syncShared: 'Tableau partagé — tout le monde sur ce Home Assistant le voit',
+    syncLocal: 'Tableau local — seulement ce navigateur. Installez l\'intégration Whiteboard pour le partager.'
   },
   es: {
     pen: 'Lápiz', eraser: 'Borrador', text: 'Texto', pan: 'Mover',
@@ -426,7 +435,9 @@ const I18N = {
     popupBlocked: 'Permite las ventanas emergentes para exportar la imagen',
     readFailed: 'No se pudo leer el archivo',
     notAnImage: 'El archivo no es una imagen válida',
-    storageFull: 'Almacenamiento lleno — elimina imágenes o vacía la pizarra'
+    storageFull: 'Almacenamiento lleno — elimina imágenes o vacía la pizarra',
+    syncShared: 'Pizarra compartida — la ven todos en este Home Assistant',
+    syncLocal: 'Pizarra local — solo este navegador. Instala la integración Whiteboard para compartirla.'
   },
   it: {
     pen: 'Matita', eraser: 'Gomma', text: 'Testo', pan: 'Sposta',
@@ -442,7 +453,9 @@ const I18N = {
     popupBlocked: 'Consenti i pop-up per esportare l\'immagine',
     readFailed: 'Impossibile leggere il file',
     notAnImage: 'Il file non è un\'immagine valida',
-    storageFull: 'Spazio esaurito — rimuovi immagini o svuota la lavagna'
+    storageFull: 'Spazio esaurito — rimuovi immagini o svuota la lavagna',
+    syncShared: 'Lavagna condivisa — la vedono tutti su questo Home Assistant',
+    syncLocal: 'Lavagna locale — solo questo browser. Installa l\'integrazione Whiteboard per condividerla.'
   },
   nl: {
     pen: 'Pen', eraser: 'Gum', text: 'Tekst', pan: 'Verplaatsen',
@@ -458,7 +471,9 @@ const I18N = {
     popupBlocked: 'Sta pop-ups toe om de afbeelding te exporteren',
     readFailed: 'Kon het bestand niet lezen',
     notAnImage: 'Dit bestand is geen geldige afbeelding',
-    storageFull: 'Opslag vol — verwijder afbeeldingen of wis het bord'
+    storageFull: 'Opslag vol — verwijder afbeeldingen of wis het bord',
+    syncShared: 'Gedeeld bord — iedereen op deze Home Assistant ziet het',
+    syncLocal: 'Lokaal bord — alleen deze browser. Installeer de Whiteboard-integratie om te delen.'
   }
 };
 
@@ -633,6 +648,7 @@ function createWhiteboard(root, options) {
   on(textBtn, 'click', () => { tool = 'text'; setActiveToolButton(textBtn); deselect(); });
   on(panBtn, 'click', () => { tool = 'pan'; setActiveToolButton(panBtn); deselect(); });
   on($('emojiToggle'), 'click', () => emojiPanel.classList.toggle('open'));
+  on($('syncBadge'), 'click', () => toast(t(shared ? 'syncShared' : 'syncLocal')));
 
   root.querySelectorAll('.swatch').forEach(sw => {
     on(sw, 'click', () => {
@@ -1645,6 +1661,14 @@ function createWhiteboard(root, options) {
     applyingRemote = false;
   }
 
+  function updateSyncBadge() {
+    const badge = $('syncBadge');
+    if (!badge) return;
+    badge.textContent = shared ? '☁️' : '🖥️';
+    badge.title = t(shared ? 'syncShared' : 'syncLocal');
+    badge.dataset.i18nTitle = shared ? 'syncShared' : 'syncLocal';
+  }
+
   function stopSharing() {
     if (unsubscribe) { try { unsubscribe(); } catch (err) {} }
     unsubscribe = null;
@@ -1652,6 +1676,7 @@ function createWhiteboard(root, options) {
     sharedTried = false;
     serverRev = 0;
     pending = [];
+    updateSyncBadge();
   }
 
   function startSharing() {
@@ -1675,10 +1700,16 @@ function createWhiteboard(root, options) {
       // se urca pe server in loc sa dispara
       localCopyStale = true;
       if (buildDelta()) pushDelta(); else dropLocalCopy();
-    }).catch(() => {
-      // integrarea nu e instalata: ramanem pe localStorage
+      updateSyncBadge();
+      console.info('[whiteboard] tabla partajata este activa, cheia "' + storageKey + '"');
+    }).catch(err => {
+      // integrarea nu e instalata (sau nu raspunde): ramanem pe localStorage
       stopSharing();
       sharedTried = true;
+      updateSyncBadge();
+      console.info('[whiteboard] tabla ramane locala in acest browser. ' +
+        'Instaleaza integrarea "Whiteboard" pentru o tabla comuna. Motiv:',
+        (err && (err.message || err.code)) || err);
     });
   }
 
@@ -1774,6 +1805,7 @@ function createWhiteboard(root, options) {
   on(document, 'fullscreenchange', () => requestAnimationFrame(resizeCanvas));
 
   applyI18n();
+  updateSyncBadge();
   loadUI();
   restore();
   resizeCanvas();
