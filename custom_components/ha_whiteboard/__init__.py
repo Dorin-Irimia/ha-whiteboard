@@ -52,7 +52,7 @@ class BoardStore:
 
     def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
-        self._store = Store[dict[str, Any]](hass, STORAGE_VERSION, STORAGE_KEY)
+        self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._boards: dict[str, dict[str, Any]] = {}
         self._listeners: dict[str, list[Callable[[dict[str, Any]], None]]] = {}
 
@@ -206,6 +206,9 @@ async def _async_register_card(hass: HomeAssistant) -> None:
         )
     except ImportError:  # Home Assistant older than 2024.7
         hass.http.register_static_path(url, str(source), True)
+    except Exception:  # noqa: BLE001 - shared boards must work even if this fails
+        _LOGGER.exception("Could not serve the Whiteboard card")
+        return
 
     version = _card_version(source)
     try:

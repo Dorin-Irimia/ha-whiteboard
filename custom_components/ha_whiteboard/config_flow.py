@@ -8,7 +8,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+try:  # Home Assistant 2024.4 and newer
+    from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+except ImportError:  # older cores
+    from homeassistant.config_entries import ConfigFlow
+    from homeassistant.data_entry_flow import FlowResult as ConfigFlowResult
 
 from .const import DOMAIN
 
