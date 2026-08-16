@@ -87,7 +87,7 @@
 
 | Requirement | Details |
 |-------------|---------|
-| Home Assistant | 2023.1 or newer |
+| Home Assistant | 2022.5 or newer. HACS hides repositories that ask for a core newer than yours, so check **Settings → About** if the repository does not show up. |
 | HACS | Only for the HACS install route — [installation guide](https://hacs.xyz/docs/use/download/download/). Manual install works without it. |
 | Dashboard | A dashboard you can edit. If your Lovelace config is in **YAML mode**, you must register the resource by hand — see [3.3](#33-registering-the-resource). |
 | Browser | Any modern browser (Chrome, Edge, Firefox, Safari) or the Home Assistant Companion App. Touch and pen input are supported. |

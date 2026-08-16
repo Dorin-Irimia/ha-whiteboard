@@ -88,7 +88,7 @@
 
 | Cerință | Detalii |
 |---------|---------|
-| Home Assistant | 2023.1 sau mai nou |
+| Home Assistant | 2022.5 sau mai nou. HACS ascunde repo-urile care cer un core mai nou decât al tău, deci verifică **Settings → About** dacă repo-ul nu apare în căutare. |
 | HACS | Doar pentru instalarea prin HACS — [ghid de instalare](https://hacs.xyz/docs/use/download/download/). Instalarea manuală merge și fără el. |
 | Dashboard | Un dashboard pe care îl poți edita. Dacă ai Lovelace în **mod YAML**, resursa trebuie adăugată de mână — vezi [3.3](#33-înregistrarea-resursei). |
 | Browser | Orice browser modern (Chrome, Edge, Firefox, Safari) sau aplicația Home Assistant Companion. Merge cu degetul și cu stylusul. |
