@@ -10,11 +10,20 @@ folderul `www` al Home Assistant si afisat printr-un card `iframe` in dashboard.
 
 ## Functii
 
-- Desen liber (mouse/deget), culori, grosime linie, radiera
+- **Panza infinita** — desenul nu mai e limitat la dimensiunea ecranului; te poti muta si desena oriunde,
+  in orice directie. Traseele sunt vectoriale, deci raman clare la orice zoom.
+- **Interfata ascundibila** — butonul rotund din dreapta-jos (sau tasta `H`) ascunde toata bara de unelte;
+  ramane doar panza alba. Starea se tine minte la reincarcare.
+- Mesajul de ajutor din stanga-jos se poate inchide definitiv cu `x`.
+- Grila de puncte (buton `▦`) — se poate opri; nu apare in PNG-ul exportat.
+- Desen liber (mouse/deget), culori, grosime linie, radiera (taie traseele, fara pete albe)
 - Obiecte emoji si text — se pot muta si redimensiona independent (colt albastru = resize, x rosu = sterge)
-- Zoom (pinch cu doua degete, Ctrl+scroll, sau butoanele +/-) si unealta de "muta vedere" (pan)
-- Undo (doar pentru desenul liber), "Sterge tot", salvare ca PNG
-- Persistenta locala in browser (localStorage) — ramane desenat la reincarcare, dar NU e sincronizat intre device-uri diferite
+- Navigare: doua degete (mutare + zoom simultan), rotita mouse-ului, `Ctrl+scroll` pentru zoom,
+  butoanele `+`/`−`, unealta `✋`, click dreapta/mijloc pentru pan. `⤢ Reset` readuce vederea la origine.
+- Undo (`Ctrl+Z`) pentru desen si obiecte, "Sterge tot", salvare ca PNG
+- Salvarea ca PNG exporta **tot continutul**, nu doar ce se vede pe ecran
+- Persistenta locala in browser (localStorage) — ramane desenat la reincarcare, dar NU e sincronizat intre device-uri diferite.
+  Un desen facut cu versiunea veche (panza fixa) este preluat automat ca fundal.
 
 ## Instalare
 
