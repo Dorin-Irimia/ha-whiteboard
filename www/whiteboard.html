@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Whiteboard</title>
+<style>
+  :root {
+    --bg: #1b1d21;
+    --panel: #232529;
+    --panel-border: #34373d;
+    --ink: #f2f1ee;
+    --muted: #9a9da3;
+    --accent: #5eb1ff;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: var(--bg);
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--ink);
+    touch-action: none;
+  }
+  #app { display: flex; flex-direction: column; width: 100%; height: 100%; }
+  #toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--panel-border);
+    flex-wrap: wrap;
+    z-index: 10;
+  }
+  .group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: #1b1d21;
+    border-radius: 10px;
+    border: 1px solid var(--panel-border);
+  }
+  .swatch {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .swatch.active { border-color: var(--ink); }
+  #customColor {
+    width: 26px; height: 26px;
+    border: none; border-radius: 50%;
+    padding: 0; background: none; cursor: pointer;
+  }
+  input[type="range"] { width: 70px; accent-color: var(--accent); }
+  button {
+    background: #2c2f35;
+    color: var(--ink);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 7px 11px;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+  button:active { background: #3a3e46; }
+  button.active-tool { background: var(--accent); color: #10131a; border-color: var(--accent); }
+  #brushPreview { border-radius: 50%; background: var(--ink); flex-shrink: 0; }
+  #zoomLabel { font-size: 12px; color: var(--muted); min-width: 38px; text-align: center; }
+  #canvasWrap {
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+    background: #3a3d42;
+  }
+  #stage {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    transform-origin: 0 0;
+    background: #ffffff;
+  }
+  canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: block;
+  }
+  #objectLayer {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+  .obj {
+    position: absolute;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    cursor: move;
+    border: 1px solid transparent;
+  }
+  .obj.emoji { font-size: 32px; line-height: 1; }
+  .obj.text {
+    font-family: -apple-system, sans-serif;
+    color: #111;
+    padding: 2px 4px;
+    outline: none;
+    overflow: visible;
+    white-space: nowrap;
+  }
+  .obj.selected { border: 1px dashed var(--accent); }
+  .handle {
+    position: absolute;
+    width: 18px; height: 18px;
+    background: var(--accent);
+    border-radius: 50%;
+    right: -9px; bottom: -9px;
+    cursor: nwse-resize;
+    display: none;
+  }
+  .obj.selected .handle { display: block; }
+  .del-handle {
+    position: absolute;
+    width: 18px; height: 18px;
+    background: #e03131;
+    color: #fff;
+    border-radius: 50%;
+    right: -9px; top: -9px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .obj.selected .del-handle { display: flex; }
+  #emojiPanel {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 6px;
+    display: none;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 2px;
+    max-width: 260px;
+    z-index: 11;
+  }
+  #emojiPanel.open { display: grid; }
+  .emoji-btn { font-size: 20px; background: none; border: none; padding: 4px; cursor: pointer; border-radius: 6px; }
+  .emoji-btn:active { background: #3a3e46; }
+  #hint {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    font-size: 11px;
+    color: var(--muted);
+    background: rgba(0,0,0,0.4);
+    padding: 3px 7px;
+    border-radius: 6px;
+    pointer-events: none;
+    z-index: 10;
+    max-width: 70%;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="toolbar">
+    <div class="group" id="colorGroup">
+      <div class="swatch active" style="background:#111111" data-color="#111111"></div>
+      <div class="swatch" style="background:#e03131" data-color="#e03131"></div>
+      <div class="swatch" style="background:#2f9e44" data-color="#2f9e44"></div>
+      <div class="swatch" style="background:#1971c2" data-color="#1971c2"></div>
+      <div class="swatch" style="background:#f08c00" data-color="#f08c00"></div>
+      <input type="color" id="customColor" value="#111111" title="Culoare personalizată">
+    </div>
+
+    <div class="group">
+      <span id="brushPreview" style="width:8px;height:8px;"></span>
+      <input type="range" id="sizeSlider" min="1" max="40" value="4">
+    </div>
+
+    <div class="group">
+      <button id="penBtn" class="active-tool">✏️ Creion</button>
+      <button id="eraserBtn">🧹 Radieră</button>
+      <button id="textBtn">🔤 Text</button>
+      <button id="panBtn">✋ Mută vedere</button>
+    </div>
+
+    <div class="group">
+      <button id="zoomOutBtn">−</button>
+      <span id="zoomLabel">100%</span>
+      <button id="zoomInBtn">+</button>
+      <button id="zoomResetBtn">⤢ Reset</button>
+    </div>
+
+    <div class="group">
+      <button id="emojiToggle">🙂 Emoji</button>
+      <button id="undoBtn">↶ Undo</button>
+      <button id="clearBtn">🗑️ Șterge tot</button>
+      <button id="saveBtn">💾 Salvează</button>
+    </div>
+  </div>
+
+  <div id="canvasWrap">
+    <div id="stage">
+      <canvas id="board"></canvas>
+      <div id="objectLayer"></div>
+    </div>
+    <div id="emojiPanel"></div>
+    <div id="hint">Desen: mouse/deget · Zoom: pinch sau Ctrl+scroll · Emoji/Text: ating obiectul ca să-l muți/redimensionezi (colț albastru) sau ștergi (x roșu)</div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const canvas = document.getElementById('board');
+  const ctx = canvas.getContext('2d');
+  const wrap = document.getElementById('canvasWrap');
+  const stage = document.getElementById('stage');
+  const objectLayer = document.getElementById('objectLayer');
+  const sizeSlider = document.getElementById('sizeSlider');
+  const brushPreview = document.getElementById('brushPreview');
+  const penBtn = document.getElementById('penBtn');
+  const eraserBtn = document.getElementById('eraserBtn');
+  const textBtn = document.getElementById('textBtn');
+  const panBtn = document.getElementById('panBtn');
+  const emojiToggle = document.getElementById('emojiToggle');
+  const emojiPanel = document.getElementById('emojiPanel');
+  const clearBtn = document.getElementById('clearBtn');
+  const undoBtn = document.getElementById('undoBtn');
+  const saveBtn = document.getElementById('saveBtn');
+  const customColor = document.getElementById('customColor');
+  const zoomInBtn = document.getElementById('zoomInBtn');
+  const zoomOutBtn = document.getElementById('zoomOutBtn');
+  const zoomResetBtn = document.getElementById('zoomResetBtn');
+  const zoomLabel = document.getElementById('zoomLabel');
+
+  let color = '#111111';
+  let size = 4;
+  let tool = 'pen'; // 'pen' | 'eraser' | 'text' | 'pan' | 'emoji'
+  let pendingEmoji = null;
+  let drawing = false;
+  let selectedObj = null;
+  let objSeq = 0;
+  const history = [];
+  const HISTORY_LIMIT = 25;
+  const STORAGE_KEY = 'ha_whiteboard_v2';
+
+  let zoom = 1, panX = 0, panY = 0;
+  const ZOOM_MIN = 0.4, ZOOM_MAX = 5;
+
+  const EMOJIS = ['😀','😂','😍','😎','🤔','👍','👎','❤️','🔥','⭐','✅','❌',
+                  '🎉','☀️','🌧️','❄️','⚡','💧','🏠','🚗','⏰','📌','💡','⚠️'];
+
+  // ---------- Toolbar / tools ----------
+  function buildEmojiPanel() {
+    EMOJIS.forEach(e => {
+      const b = document.createElement('button');
+      b.className = 'emoji-btn';
+      b.textContent = e;
+      b.addEventListener('click', () => {
+        pendingEmoji = e;
+        tool = 'emoji';
+        setActiveToolButton(null);
+        emojiPanel.classList.remove('open');
+      });
+      emojiPanel.appendChild(b);
+    });
+  }
+  buildEmojiPanel();
+
+  function setActiveToolButton(activeBtn) {
+    [penBtn, eraserBtn, textBtn, panBtn].forEach(b => b.classList.remove('active-tool'));
+    if (activeBtn) activeBtn.classList.add('active-tool');
+  }
+  penBtn.addEventListener('click', () => { tool = 'pen'; setActiveToolButton(penBtn); deselect(); });
+  eraserBtn.addEventListener('click', () => { tool = 'eraser'; setActiveToolButton(eraserBtn); deselect(); });
+  textBtn.addEventListener('click', () => { tool = 'text'; setActiveToolButton(textBtn); deselect(); });
+  panBtn.addEventListener('click', () => { tool = 'pan'; setActiveToolButton(panBtn); deselect(); });
+
+  document.querySelectorAll('.swatch').forEach(sw => {
+    sw.addEventListener('click', () => {
+      document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+      color = sw.dataset.color;
+      if (selectedObj && selectedObj.dataset.type === 'text') selectedObj.style.color = color;
+      else { tool = 'pen'; setActiveToolButton(penBtn); }
+    });
+  });
+  customColor.addEventListener('input', () => {
+    document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+    color = customColor.value;
+    if (selectedObj && selectedObj.dataset.type === 'text') selectedObj.style.color = color;
+    else { tool = 'pen'; setActiveToolButton(penBtn); }
+  });
+  sizeSlider.addEventListener('input', () => {
+    size = parseInt(sizeSlider.value, 10);
+    brushPreview.style.width = Math.max(4, size) + 'px';
+    brushPreview.style.height = Math.max(4, size) + 'px';
+  });
+  emojiToggle.addEventListener('click', () => emojiPanel.classList.toggle('open'));
+
+  // ---------- Canvas sizing ----------
+  function resizeCanvas() {
+    const prev = document.createElement('canvas');
+    prev.width = canvas.width; prev.height = canvas.height;
+    if (canvas.width > 0) prev.getContext('2d').drawImage(canvas, 0, 0);
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = wrap.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (prev.width > 0 && prev.height > 0) {
+      ctx.drawImage(prev, 0, 0, prev.width, prev.height, 0, 0, rect.width, rect.height);
+    } else {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, rect.width, rect.height);
+    }
+  }
+
+  // ---------- Zoom / Pan ----------
+  function applyTransform() {
+    stage.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
+    zoomLabel.textContent = Math.round(zoom * 100) + '%';
+  }
+
+  function zoomAt(newZoom, mx, my) {
+    newZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, newZoom));
+    const localX = (mx - panX) / zoom;
+    const localY = (my - panY) / zoom;
+    panX = mx - newZoom * localX;
+    panY = my - newZoom * localY;
+    zoom = newZoom;
+    applyTransform();
+  }
+
+  zoomInBtn.addEventListener('click', () => {
+    const r = wrap.getBoundingClientRect();
+    zoomAt(zoom * 1.25, r.width / 2, r.height / 2);
+  });
+  zoomOutBtn.addEventListener('click', () => {
+    const r = wrap.getBoundingClientRect();
+    zoomAt(zoom / 1.25, r.width / 2, r.height / 2);
+  });
+  zoomResetBtn.addEventListener('click', () => { zoom = 1; panX = 0; panY = 0; applyTransform(); });
+
+  wrap.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const r = wrap.getBoundingClientRect();
+    const mx = e.clientX - r.left, my = e.clientY - r.top;
+    const factor = e.deltaY < 0 ? 1.1 : 0.9;
+    zoomAt(zoom * factor, mx, my);
+  }, { passive: false });
+
+  // ---------- Coordinate helpers ----------
+  function toLocal(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    return { x: (clientX - rect.left) / zoom, y: (clientY - rect.top) / zoom };
+  }
+
+  // ---------- Freehand drawing ----------
+  function pushHistory() {
+    try {
+      history.push(canvas.toDataURL('image/png'));
+      if (history.length > HISTORY_LIMIT) history.shift();
+    } catch (err) {}
+  }
+
+  let lastX = 0, lastY = 0;
+  function startDraw(clientX, clientY) {
+    pushHistory();
+    drawing = true;
+    const p = toLocal(clientX, clientY);
+    lastX = p.x; lastY = p.y;
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+  }
+  function moveDraw(clientX, clientY) {
+    if (!drawing) return;
+    const p = toLocal(clientX, clientY);
+    ctx.strokeStyle = tool === 'eraser' ? '#ffffff' : color;
+    ctx.lineWidth = tool === 'eraser' ? size * 3 : size;
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  }
+  function endDraw() { if (drawing) { drawing = false; save(); } }
+
+  // ---------- Objects (emoji / text) ----------
+  function deselect() {
+    if (selectedObj) selectedObj.classList.remove('selected');
+    selectedObj = null;
+  }
+
+  function selectObj(el) {
+    if (selectedObj && selectedObj !== el) selectedObj.classList.remove('selected');
+    selectedObj = el;
+    el.classList.add('selected');
+  }
+
+  function createObject(type, x, y, content) {
+    const el = document.createElement('div');
+    el.className = 'obj ' + type;
+    el.dataset.type = type;
+    el.dataset.id = String(++objSeq);
+    const w = type === 'emoji' ? 44 : 120;
+    const h = type === 'emoji' ? 44 : 40;
+    el.style.left = (x - w / 2) + 'px';
+    el.style.top = (y - h / 2) + 'px';
+    el.style.width = w + 'px';
+    el.style.height = h + 'px';
+
+    if (type === 'emoji') {
+      el.textContent = content;
+      el.style.fontSize = Math.round(h * 0.8) + 'px';
+    } else {
+      el.contentEditable = 'true';
+      el.style.color = color;
+      el.style.fontSize = '20px';
+      el.textContent = content || 'Text';
+    }
+
+    const handle = document.createElement('div');
+    handle.className = 'handle';
+    el.appendChild(handle);
+
+    const del = document.createElement('div');
+    del.className = 'del-handle';
+    del.textContent = '✕';
+    el.appendChild(del);
+
+    objectLayer.appendChild(el);
+    attachObjEvents(el, handle, del);
+    selectObj(el);
+    if (type === 'text') {
+      requestAnimationFrame(() => { el.focus(); document.execCommand('selectAll', false, null); });
+    }
+    return el;
+  }
+
+  function attachObjEvents(el, handle, del) {
+    let mode = null; // 'move' | 'resize'
+    let startClientX = 0, startClientY = 0;
+    let startLeft = 0, startTop = 0, startW = 0, startH = 0;
+
+    function pointerDown(e) {
+      const t = e.touches ? e.touches[0] : e;
+      startClientX = t.clientX; startClientY = t.clientY;
+      startLeft = parseFloat(el.style.left);
+      startTop = parseFloat(el.style.top);
+      startW = parseFloat(el.style.width);
+      startH = parseFloat(el.style.height);
+      selectObj(el);
+      if (e.target === handle) mode = 'resize'; else mode = 'move';
+      e.stopPropagation();
+      e.preventDefault();
+    }
+
+    function pointerMove(e) {
+      if (!mode) return;
+      const t = e.touches ? e.touches[0] : e;
+      const dx = (t.clientX - startClientX) / zoom;
+      const dy = (t.clientY - startClientY) / zoom;
+      if (mode === 'move') {
+        el.style.left = (startLeft + dx) + 'px';
+        el.style.top = (startTop + dy) + 'px';
+      } else if (mode === 'resize') {
+        const newW = Math.max(20, startW + dx);
+        const newH = Math.max(20, startH + dy);
+        el.style.width = newW + 'px';
+        el.style.height = newH + 'px';
+        if (el.dataset.type === 'emoji') {
+          el.style.fontSize = Math.round(Math.min(newW, newH) * 0.8) + 'px';
+        } else {
+          el.style.fontSize = Math.round(newH * 0.5) + 'px';
+        }
+      }
+      e.preventDefault();
+    }
+
+    function pointerUp() { if (mode) { mode = null; save(); } }
+
+    el.addEventListener('mousedown', pointerDown);
+    window.addEventListener('mousemove', pointerMove);
+    window.addEventListener('mouseup', pointerUp);
+    el.addEventListener('touchstart', pointerDown, { passive: false });
+    window.addEventListener('touchmove', pointerMove, { passive: false });
+    window.addEventListener('touchend', pointerUp);
+
+    del.addEventListener('mousedown', (e) => { e.stopPropagation(); });
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      el.remove();
+      if (selectedObj === el) selectedObj = null;
+      save();
+    });
+    el.addEventListener('dblclick', (e) => {
+      if (el.dataset.type === 'text') { el.focus(); }
+    });
+    el.addEventListener('blur', () => save());
+  }
+
+  // ---------- Pointer routing on canvas ----------
+  let panning = false, panStartX = 0, panStartY = 0, panOrigX = 0, panOrigY = 0;
+  const activeTouches = new Map();
+  let pinchStartDist = 0, pinchStartZoom = 1;
+
+  function midpoint(t1, t2) {
+    return { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
+  }
+  function dist(t1, t2) {
+    return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+  }
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (tool === 'pan') {
+      panning = true; panStartX = e.clientX; panStartY = e.clientY;
+      panOrigX = panX; panOrigY = panY;
+      return;
+    }
+    if (tool === 'emoji' && pendingEmoji) {
+      const p = toLocal(e.clientX, e.clientY);
+      createObject('emoji', p.x, p.y, pendingEmoji);
+      return;
+    }
+    if (tool === 'text') {
+      const p = toLocal(e.clientX, e.clientY);
+      createObject('text', p.x, p.y, '');
+      return;
+    }
+    deselect();
+    startDraw(e.clientX, e.clientY);
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (panning) {
+      panX = panOrigX + (e.clientX - panStartX);
+      panY = panOrigY + (e.clientY - panStartY);
+      applyTransform();
+      return;
+    }
+    moveDraw(e.clientX, e.clientY);
+  });
+  window.addEventListener('mouseup', () => { panning = false; endDraw(); });
+
+  canvas.addEventListener('touchstart', (e) => {
+    for (const t of e.changedTouches) activeTouches.set(t.identifier, t);
+    if (activeTouches.size === 2) {
+      drawing = false;
+      const pts = Array.from(activeTouches.values());
+      pinchStartDist = dist(pts[0], pts[1]);
+      pinchStartZoom = zoom;
+      e.preventDefault();
+      return;
+    }
+    if (activeTouches.size === 1) {
+      const t = e.touches[0];
+      if (tool === 'pan') {
+        panning = true; panStartX = t.clientX; panStartY = t.clientY;
+        panOrigX = panX; panOrigY = panY;
+      } else if (tool === 'emoji' && pendingEmoji) {
+        const p = toLocal(t.clientX, t.clientY);
+        createObject('emoji', p.x, p.y, pendingEmoji);
+      } else if (tool === 'text') {
+        const p = toLocal(t.clientX, t.clientY);
+        createObject('text', p.x, p.y, '');
+      } else {
+        deselect();
+        startDraw(t.clientX, t.clientY);
+      }
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', (e) => {
+    for (const t of e.changedTouches) if (activeTouches.has(t.identifier)) activeTouches.set(t.identifier, t);
+    if (activeTouches.size === 2) {
+      const pts = Array.from(activeTouches.values());
+      const r = wrap.getBoundingClientRect();
+      const mid = midpoint(pts[0], pts[1]);
+      const mx = mid.x - r.left, my = mid.y - r.top;
+      const newDist = dist(pts[0], pts[1]);
+      const newZoom = pinchStartZoom * (newDist / pinchStartDist);
+      zoomAt(newZoom, mx, my);
+      e.preventDefault();
+      return;
+    }
+    if (panning) {
+      const t = e.touches[0];
+      panX = panOrigX + (t.clientX - panStartX);
+      panY = panOrigY + (t.clientY - panStartY);
+      applyTransform();
+    } else if (drawing) {
+      const t = e.touches[0];
+      moveDraw(t.clientX, t.clientY);
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', (e) => {
+    for (const t of e.changedTouches) activeTouches.delete(t.identifier);
+    if (activeTouches.size < 2) pinchStartDist = 0;
+    if (activeTouches.size === 0) { panning = false; endDraw(); }
+  });
+
+  // ---------- Clear / Undo / Save ----------
+  clearBtn.addEventListener('click', () => {
+    pushHistory();
+    const rect = wrap.getBoundingClientRect();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    objectLayer.querySelectorAll('.obj').forEach(el => el.remove());
+    selectedObj = null;
+    save();
+  });
+
+  undoBtn.addEventListener('click', () => {
+    const snap = history.pop();
+    if (!snap) return;
+    const img = new Image();
+    img.onload = () => {
+      const rect = wrap.getBoundingClientRect();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, rect.width, rect.height);
+      save();
+    };
+    img.src = snap;
+  });
+
+  saveBtn.addEventListener('click', () => {
+    // flatten objects onto a temp canvas for export
+    const rect = wrap.getBoundingClientRect();
+    const tmp = document.createElement('canvas');
+    tmp.width = canvas.width; tmp.height = canvas.height;
+    const tctx = tmp.getContext('2d');
+    tctx.drawImage(canvas, 0, 0);
+    const dpr = window.devicePixelRatio || 1;
+    tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    objectLayer.querySelectorAll('.obj').forEach(el => {
+      const x = parseFloat(el.style.left), y = parseFloat(el.style.top);
+      const w = parseFloat(el.style.width), h = parseFloat(el.style.height);
+      if (el.dataset.type === 'emoji') {
+        tctx.font = Math.round(Math.min(w, h) * 0.8) + 'px sans-serif';
+        tctx.textAlign = 'center'; tctx.textBaseline = 'middle';
+        tctx.fillText(el.textContent, x + w / 2, y + h / 2);
+      } else {
+        tctx.font = Math.round(h * 0.5) + 'px sans-serif';
+        tctx.fillStyle = el.style.color || '#111';
+        tctx.textAlign = 'left'; tctx.textBaseline = 'middle';
+        tctx.fillText(el.textContent, x, y + h / 2);
+      }
+    });
+    const link = document.createElement('a');
+    link.download = 'whiteboard-' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.png';
+    link.href = tmp.toDataURL('image/png');
+    link.click();
+  });
+
+  function serializeObjects() {
+    return Array.from(objectLayer.querySelectorAll('.obj')).map(el => ({
+      type: el.dataset.type,
+      left: el.style.left, top: el.style.top,
+      width: el.style.width, height: el.style.height,
+      fontSize: el.style.fontSize,
+      color: el.style.color || null,
+      content: el.textContent
+    }));
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        png: canvas.toDataURL('image/png'),
+        objects: serializeObjects()
+      }));
+    } catch (err) {}
+  }
+
+  function restore() {
+    let data = null;
+    try { data = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch (err) {}
+    const rect = wrap.getBoundingClientRect();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    if (!data) return;
+    if (data.png) {
+      const img = new Image();
+      img.onload = () => ctx.drawImage(img, 0, 0, rect.width, rect.height);
+      img.src = data.png;
+    }
+    (data.objects || []).forEach(o => {
+      const el = document.createElement('div');
+      el.className = 'obj ' + o.type;
+      el.dataset.type = o.type;
+      el.dataset.id = String(++objSeq);
+      el.style.left = o.left; el.style.top = o.top;
+      el.style.width = o.width; el.style.height = o.height;
+      el.style.fontSize = o.fontSize;
+      if (o.type === 'text') { el.contentEditable = 'true'; el.style.color = o.color || '#111'; }
+      el.textContent = o.content;
+      const handle = document.createElement('div');
+      handle.className = 'handle';
+      el.appendChild(handle);
+      const del = document.createElement('div');
+      del.className = 'del-handle';
+      del.textContent = '✕';
+      el.appendChild(del);
+      objectLayer.appendChild(el);
+      attachObjEvents(el, handle, del);
+    });
+  }
+
+  wrap.addEventListener('mousedown', (e) => {
+    if (e.target === wrap || e.target === stage) deselect();
+  });
+
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+  restore();
+  applyTransform();
+  brushPreview.style.width = size + 'px';
+  brushPreview.style.height = size + 'px';
+})();
+</script>
+</body>
+</html>
