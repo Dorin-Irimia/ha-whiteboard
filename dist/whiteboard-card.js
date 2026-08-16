@@ -8,7 +8,7 @@
  * Fara dependinte externe. Tot desenul e vectorial, pe o panza infinita.
  */
 
-const VERSION = '2.1';
+const VERSION = '2.2';
 
 const STYLES = `
   :host {
@@ -143,6 +143,37 @@ const STYLES = `
     border: 1px solid transparent;
   }
   .obj .txt { line-height: 1.1; outline: none; white-space: nowrap; }
+  .obj.image {
+    background: #fff;
+    border-radius: 4px;
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.28));
+  }
+  .obj.image img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+    display: block;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
+    border-radius: 3px;
+  }
+
+  .dropHint {
+    position: absolute;
+    inset: 12px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed var(--wb-accent);
+    border-radius: 14px;
+    background: rgba(94,177,255,0.12);
+    color: #10131a;
+    font-size: 15px;
+    font-weight: 600;
+    z-index: 35;
+    pointer-events: none;
+  }
+  .dropHint.show { display: flex; }
   .obj.text .txt { color: inherit; user-select: text; }
   .obj.text { color: #111; }
   .obj.selected { border: 1px dashed var(--wb-accent); }
@@ -254,48 +285,195 @@ const MARKUP = `
         <div class="swatch" style="background:#2f9e44" data-color="#2f9e44"></div>
         <div class="swatch" style="background:#1971c2" data-color="#1971c2"></div>
         <div class="swatch" style="background:#f08c00" data-color="#f08c00"></div>
-        <input type="color" id="customColor" value="#111111" title="Culoare personalizată">
+        <input type="color" id="customColor" value="#111111" data-i18n-title="color">
       </div>
 
       <div class="group">
         <span class="brushPreview" id="brushPreview" style="width:8px;height:8px;"></span>
-        <input type="range" id="sizeSlider" min="1" max="40" value="4">
+        <input type="range" id="sizeSlider" min="1" max="40" value="4" data-i18n-title="size">
       </div>
 
       <div class="group">
-        <button id="penBtn" class="active-tool" title="Creion">✏️ Creion</button>
-        <button id="eraserBtn" title="Radieră">🧹 Radieră</button>
-        <button id="textBtn" title="Text">🔤 Text</button>
-        <button id="panBtn" title="Mută vederea">✋ Mută</button>
+        <button id="penBtn" class="active-tool" data-i18n-title="pen"><span>✏️</span><span data-i18n="pen"></span></button>
+        <button id="eraserBtn" data-i18n-title="eraser"><span>🧹</span><span data-i18n="eraser"></span></button>
+        <button id="textBtn" data-i18n-title="text"><span>🔤</span><span data-i18n="text"></span></button>
+        <button id="panBtn" data-i18n-title="pan"><span>✋</span><span data-i18n="pan"></span></button>
       </div>
 
       <div class="group">
-        <button id="zoomOutBtn" title="Zoom −">−</button>
+        <button id="zoomOutBtn" data-i18n-title="zoomOut">−</button>
         <span class="zoomLabel" id="zoomLabel">100%</span>
-        <button id="zoomInBtn" title="Zoom +">+</button>
-        <button id="zoomResetBtn" title="Înapoi la centru">⤢</button>
-        <button id="gridBtn" title="Grilă">▦</button>
-        <button id="fsBtn" title="Ecran complet">⛶</button>
+        <button id="zoomInBtn" data-i18n-title="zoomIn">+</button>
+        <button id="zoomResetBtn" data-i18n-title="resetView">⤢</button>
+        <button id="gridBtn" data-i18n-title="grid">▦</button>
+        <button id="fsBtn" data-i18n-title="fullscreen">⛶</button>
       </div>
 
       <div class="group">
-        <button id="emojiToggle" title="Emoji">🙂</button>
-        <button id="undoBtn" title="Undo (Ctrl+Z)">↶</button>
-        <button id="clearBtn" title="Șterge tot">🗑️</button>
-        <button id="saveBtn" title="Salvează ca PNG">💾</button>
+        <button id="emojiToggle" data-i18n-title="emoji">🙂</button>
+        <button id="imageBtn" data-i18n-title="image">🖼️</button>
+        <button id="undoBtn" data-i18n-title="undo">↶</button>
+        <button id="clearBtn" data-i18n-title="clear">🗑️</button>
+        <button id="saveBtn" data-i18n-title="export">💾</button>
       </div>
     </div>
+
+    <input type="file" id="fileInput" accept="image/*" multiple hidden>
+    <div class="dropHint" id="dropHint" data-i18n="dropHere"></div>
 
     <div class="emojiPanel" id="emojiPanel"></div>
 
     <div class="hint" id="hint">
-      <span>Pânză infinită · Mută: 2 degete / ✋ · Zoom: pinch sau Ctrl+scroll · Ascunde butoanele: H</span>
-      <button class="hintClose" id="hintClose" title="Ascunde permanent">✕</button>
+      <span data-i18n="hint"></span>
+      <button class="hintClose" id="hintClose" data-i18n-title="hideHint">✕</button>
     </div>
 
-    <button class="chromeToggle" id="chromeToggle" title="Ascunde/arată butoanele (H)">✕</button>
+    <button class="chromeToggle" id="chromeToggle" data-i18n-title="toggleUi">✕</button>
   </div>
 `;
+
+/* ============================================================
+ *  Traduceri / Translations
+ *  Ca sa adaugi o limba noua: copiaza blocul "en", tradu valorile
+ *  si adauga codul limbii in SUPPORTED_LANGUAGES.
+ * ============================================================ */
+const I18N = {
+  en: {
+    pen: 'Pen', eraser: 'Eraser', text: 'Text', pan: 'Move',
+    color: 'Custom colour', size: 'Brush size',
+    zoomIn: 'Zoom in', zoomOut: 'Zoom out', resetView: 'Reset view',
+    grid: 'Dot grid', fullscreen: 'Fullscreen',
+    emoji: 'Emoji', image: 'Add image / sticker (or paste with Ctrl+V)',
+    undo: 'Undo (Ctrl+Z)', clear: 'Clear all', export: 'Export as PNG',
+    toggleUi: 'Hide / show the toolbar (H)', hideHint: 'Hide permanently',
+    dropHere: 'Drop the image here',
+    hint: 'Infinite canvas · Pan: 2 fingers / ✋ · Zoom: pinch or Ctrl+scroll · Hide the buttons: H',
+    openedInTab: 'The image opened in a new tab — save it from there',
+    popupBlocked: 'Allow pop-ups to export the image',
+    readFailed: 'Could not read the file',
+    notAnImage: 'That file is not a valid image',
+    storageFull: 'Storage is full — remove a few images or clear the board'
+  },
+  ro: {
+    pen: 'Creion', eraser: 'Radieră', text: 'Text', pan: 'Mută',
+    color: 'Culoare personalizată', size: 'Grosimea liniei',
+    zoomIn: 'Mărește', zoomOut: 'Micșorează', resetView: 'Înapoi la centru',
+    grid: 'Grilă de puncte', fullscreen: 'Ecran complet',
+    emoji: 'Emoji', image: 'Adaugă imagine / sticker (sau lipește cu Ctrl+V)',
+    undo: 'Anulează (Ctrl+Z)', clear: 'Șterge tot', export: 'Exportă ca PNG',
+    toggleUi: 'Ascunde / arată butoanele (H)', hideHint: 'Ascunde permanent',
+    dropHere: 'Lasă imaginea aici',
+    hint: 'Pânză infinită · Mută: 2 degete / ✋ · Zoom: pinch sau Ctrl+scroll · Ascunde butoanele: H',
+    openedInTab: 'Imaginea s-a deschis într-o filă nouă — salveaz-o de acolo',
+    popupBlocked: 'Permite ferestrele pop-up ca să poți exporta imaginea',
+    readFailed: 'Nu am putut citi fișierul',
+    notAnImage: 'Fișierul nu este o imagine validă',
+    storageFull: 'Spațiul de stocare e plin — șterge câteva imagini sau golește tabla'
+  },
+  de: {
+    pen: 'Stift', eraser: 'Radierer', text: 'Text', pan: 'Verschieben',
+    color: 'Eigene Farbe', size: 'Strichstärke',
+    zoomIn: 'Vergrößern', zoomOut: 'Verkleinern', resetView: 'Ansicht zurücksetzen',
+    grid: 'Punktraster', fullscreen: 'Vollbild',
+    emoji: 'Emoji', image: 'Bild / Sticker hinzufügen (oder mit Strg+V einfügen)',
+    undo: 'Rückgängig (Strg+Z)', clear: 'Alles löschen', export: 'Als PNG exportieren',
+    toggleUi: 'Werkzeugleiste aus-/einblenden (H)', hideHint: 'Dauerhaft ausblenden',
+    dropHere: 'Bild hier ablegen',
+    hint: 'Unendliche Fläche · Verschieben: 2 Finger / ✋ · Zoom: Pinch oder Strg+Scrollen · Buttons ausblenden: H',
+    openedInTab: 'Das Bild wurde in einem neuen Tab geöffnet — dort speichern',
+    popupBlocked: 'Pop-ups erlauben, um das Bild zu exportieren',
+    readFailed: 'Datei konnte nicht gelesen werden',
+    notAnImage: 'Die Datei ist kein gültiges Bild',
+    storageFull: 'Speicher voll — entferne einige Bilder oder leere die Tafel'
+  },
+  fr: {
+    pen: 'Crayon', eraser: 'Gomme', text: 'Texte', pan: 'Déplacer',
+    color: 'Couleur personnalisée', size: 'Épaisseur du trait',
+    zoomIn: 'Zoom avant', zoomOut: 'Zoom arrière', resetView: 'Réinitialiser la vue',
+    grid: 'Grille de points', fullscreen: 'Plein écran',
+    emoji: 'Emoji', image: 'Ajouter une image / un sticker (ou coller avec Ctrl+V)',
+    undo: 'Annuler (Ctrl+Z)', clear: 'Tout effacer', export: 'Exporter en PNG',
+    toggleUi: 'Masquer / afficher la barre d\'outils (H)', hideHint: 'Masquer définitivement',
+    dropHere: 'Déposez l\'image ici',
+    hint: 'Toile infinie · Déplacer : 2 doigts / ✋ · Zoom : pincer ou Ctrl+molette · Masquer les boutons : H',
+    openedInTab: 'L\'image s\'est ouverte dans un nouvel onglet — enregistrez-la depuis là',
+    popupBlocked: 'Autorisez les pop-ups pour exporter l\'image',
+    readFailed: 'Impossible de lire le fichier',
+    notAnImage: 'Ce fichier n\'est pas une image valide',
+    storageFull: 'Stockage plein — supprimez des images ou videz le tableau'
+  },
+  es: {
+    pen: 'Lápiz', eraser: 'Borrador', text: 'Texto', pan: 'Mover',
+    color: 'Color personalizado', size: 'Grosor del trazo',
+    zoomIn: 'Acercar', zoomOut: 'Alejar', resetView: 'Restablecer vista',
+    grid: 'Cuadrícula de puntos', fullscreen: 'Pantalla completa',
+    emoji: 'Emoji', image: 'Añadir imagen / pegatina (o pegar con Ctrl+V)',
+    undo: 'Deshacer (Ctrl+Z)', clear: 'Borrar todo', export: 'Exportar como PNG',
+    toggleUi: 'Ocultar / mostrar la barra (H)', hideHint: 'Ocultar permanentemente',
+    dropHere: 'Suelta la imagen aquí',
+    hint: 'Lienzo infinito · Mover: 2 dedos / ✋ · Zoom: pellizcar o Ctrl+rueda · Ocultar botones: H',
+    openedInTab: 'La imagen se abrió en una pestaña nueva — guárdala desde allí',
+    popupBlocked: 'Permite las ventanas emergentes para exportar la imagen',
+    readFailed: 'No se pudo leer el archivo',
+    notAnImage: 'El archivo no es una imagen válida',
+    storageFull: 'Almacenamiento lleno — elimina imágenes o vacía la pizarra'
+  },
+  it: {
+    pen: 'Matita', eraser: 'Gomma', text: 'Testo', pan: 'Sposta',
+    color: 'Colore personalizzato', size: 'Spessore del tratto',
+    zoomIn: 'Ingrandisci', zoomOut: 'Riduci', resetView: 'Reimposta vista',
+    grid: 'Griglia a punti', fullscreen: 'Schermo intero',
+    emoji: 'Emoji', image: 'Aggiungi immagine / sticker (o incolla con Ctrl+V)',
+    undo: 'Annulla (Ctrl+Z)', clear: 'Cancella tutto', export: 'Esporta come PNG',
+    toggleUi: 'Nascondi / mostra la barra (H)', hideHint: 'Nascondi definitivamente',
+    dropHere: 'Trascina qui l\'immagine',
+    hint: 'Tela infinita · Sposta: 2 dita / ✋ · Zoom: pizzica o Ctrl+rotellina · Nascondi i pulsanti: H',
+    openedInTab: 'L\'immagine si è aperta in una nuova scheda — salvala da lì',
+    popupBlocked: 'Consenti i pop-up per esportare l\'immagine',
+    readFailed: 'Impossibile leggere il file',
+    notAnImage: 'Il file non è un\'immagine valida',
+    storageFull: 'Spazio esaurito — rimuovi immagini o svuota la lavagna'
+  },
+  nl: {
+    pen: 'Pen', eraser: 'Gum', text: 'Tekst', pan: 'Verplaatsen',
+    color: 'Aangepaste kleur', size: 'Lijndikte',
+    zoomIn: 'Inzoomen', zoomOut: 'Uitzoomen', resetView: 'Weergave herstellen',
+    grid: 'Stippenraster', fullscreen: 'Volledig scherm',
+    emoji: 'Emoji', image: 'Afbeelding / sticker toevoegen (of plakken met Ctrl+V)',
+    undo: 'Ongedaan maken (Ctrl+Z)', clear: 'Alles wissen', export: 'Exporteren als PNG',
+    toggleUi: 'Werkbalk verbergen / tonen (H)', hideHint: 'Permanent verbergen',
+    dropHere: 'Zet de afbeelding hier neer',
+    hint: 'Oneindig canvas · Verplaatsen: 2 vingers / ✋ · Zoom: knijpen of Ctrl+scroll · Knoppen verbergen: H',
+    openedInTab: 'De afbeelding is in een nieuw tabblad geopend — sla hem daar op',
+    popupBlocked: 'Sta pop-ups toe om de afbeelding te exporteren',
+    readFailed: 'Kon het bestand niet lezen',
+    notAnImage: 'Dit bestand is geen geldige afbeelding',
+    storageFull: 'Opslag vol — verwijder afbeeldingen of wis het bord'
+  }
+};
+
+const SUPPORTED_LANGUAGES = Object.keys(I18N);
+const DEFAULT_LANGUAGE = 'en';
+const LANGUAGE_NAMES = {
+  en: 'English', ro: 'Română', de: 'Deutsch', fr: 'Français',
+  es: 'Español', it: 'Italiano', nl: 'Nederlands'
+};
+
+function resolveLanguage(pref, hassLanguage) {
+  if (pref && pref !== 'auto') {
+    const code = String(pref).toLowerCase().slice(0, 2);
+    return I18N[code] ? code : DEFAULT_LANGUAGE;
+  }
+  if (pref === 'auto') {
+    const candidates = [hassLanguage, (typeof navigator !== 'undefined' ? navigator.language : '')];
+    for (const c of candidates) {
+      if (!c) continue;
+      const code = String(c).toLowerCase().slice(0, 2);
+      if (I18N[code]) return code;
+    }
+  }
+  return DEFAULT_LANGUAGE;
+}
 
 const EMOJIS = ['😀','😂','😍','😎','🤔','👍','👎','❤️','🔥','⭐','✅','❌',
                 '🎉','☀️','🌧️','❄️','⚡','💧','🏠','🚗','⏰','📌','💡','⚠️'];
@@ -307,7 +485,10 @@ const LEGACY_KEY = 'ha_whiteboard_v2';
  *  Motorul whiteboard
  * ============================================================ */
 function createWhiteboard(root, options) {
-  const opts = Object.assign({ storageKey: DEFAULT_KEY, grid: true, hideToolbar: false }, options || {});
+  const opts = Object.assign(
+    { storageKey: DEFAULT_KEY, grid: true, hideToolbar: false, language: DEFAULT_LANGUAGE },
+    options || {}
+  );
 
   root.innerHTML = '<style>' + STYLES + '</style>' + MARKUP;
   const $ = (id) => root.getElementById(id);
@@ -330,6 +511,15 @@ function createWhiteboard(root, options) {
 
   let storageKey = opts.storageKey;
   let uiKey = storageKey + '_ui';
+  let lang = resolveLanguage(opts.language, opts.hassLanguage);
+
+  function t(key) {
+    return (I18N[lang] && I18N[lang][key]) || I18N[DEFAULT_LANGUAGE][key] || key;
+  }
+  function applyI18n() {
+    root.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+    root.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+  }
 
   let color = '#111111';
   let size = 4;
@@ -693,11 +883,22 @@ function createWhiteboard(root, options) {
     el.style.fontSize = o.fontSize + 'px';
     if (o.type === 'text') el.style.color = o.color || '#111';
 
-    const txt = document.createElement('span');
-    txt.className = 'txt';
-    txt.textContent = o.content || '';
-    if (o.type === 'text') txt.contentEditable = 'true';
-    el.appendChild(txt);
+    let txt = null;
+    if (o.type === 'image') {
+      const img = document.createElement('img');
+      img.className = 'img';
+      img.alt = '';
+      img.draggable = false;
+      img.src = o.src;
+      el.appendChild(img);
+      el.dataset.ratio = String(o.width / o.height);
+    } else {
+      txt = document.createElement('span');
+      txt.className = 'txt';
+      txt.textContent = o.content || '';
+      if (o.type === 'text') txt.contentEditable = 'true';
+      el.appendChild(txt);
+    }
 
     const handle = document.createElement('div');
     handle.className = 'handle';
@@ -729,6 +930,124 @@ function createWhiteboard(root, options) {
     saveSoon();
     return el;
   }
+
+  /* ---------- Imagini / stickere ---------- */
+  const MAX_IMG_DIM = 1000;     // latura maxima pastrata, in pixeli
+  const JPEG_QUALITY = 0.82;
+  const PLACED_MAX = 320;       // latimea maxima la asezarea pe tabla, in unitati "lume"
+
+  function addImageFiles(files, x, y) {
+    const list = Array.from(files || []).filter(f => f && /^image\//.test(f.type));
+    if (!list.length) return;
+    list.forEach((file, i) => {
+      const reader = new FileReader();
+      reader.onload = () => prepareImage(reader.result, (src, w, h) => {
+        placeImage(src, w, h, x + i * 18, y + i * 18);
+      });
+      reader.onerror = () => toast(t('readFailed'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Micsoram inainte de salvare: localStorage are ~5 MB, o poza de telefon are mult mai mult.
+  function prepareImage(src, cb) {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, MAX_IMG_DIM / Math.max(img.naturalWidth, img.naturalHeight));
+      const tw = Math.max(1, Math.round(img.naturalWidth * scale));
+      const th = Math.max(1, Math.round(img.naturalHeight * scale));
+      const c = document.createElement('canvas');
+      c.width = tw; c.height = th;
+      const cc = c.getContext('2d');
+      cc.drawImage(img, 0, 0, tw, th);
+      // JPEG pierde transparenta, deci pastram PNG doar cand chiar e nevoie (stickere decupate)
+      let transparent = false;
+      try {
+        const d = cc.getImageData(0, 0, tw, th).data;
+        for (let i = 3; i < d.length; i += 40) { if (d[i] < 250) { transparent = true; break; } }
+      } catch (err) { transparent = /^data:image\/png/.test(src); }
+      let out;
+      try {
+        out = transparent ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', JPEG_QUALITY);
+      } catch (err) { out = src; }
+      cb(out, tw, th);
+    };
+    img.onerror = () => toast(t('notAnImage'));
+    img.src = src;
+  }
+
+  function placeImage(src, natW, natH, x, y) {
+    pushHistory();
+    const scale = Math.min(1, PLACED_MAX / Math.max(natW, natH));
+    const w = Math.max(24, Math.round(natW * scale));
+    const h = Math.max(24, Math.round(natH * scale));
+    const el = buildObject({
+      type: 'image',
+      left: x - w / 2, top: y - h / 2,
+      width: w, height: h,
+      fontSize: 20,
+      src: src
+    });
+    selectObj(el);
+    saveSoon();
+    return el;
+  }
+
+  function viewCenter() {
+    return { x: (vw / 2 - panX) / zoom, y: (vh / 2 - panY) / zoom };
+  }
+
+  const fileInput = $('fileInput');
+  on($('imageBtn'), 'click', () => fileInput.click());
+  on(fileInput, 'change', () => {
+    const c = viewCenter();
+    addImageFiles(fileInput.files, c.x, c.y);
+    fileInput.value = '';
+  });
+
+  // Lipire din clipboard (Ctrl+V / cmd+V), doar cand tabla e sub cursor
+  on(document, 'paste', (e) => {
+    if (!hovered) return;
+    const items = (e.clipboardData && e.clipboardData.items) || [];
+    const files = [];
+    for (const it of items) {
+      if (it.kind === 'file' && /^image\//.test(it.type)) {
+        const f = it.getAsFile();
+        if (f) files.push(f);
+      }
+    }
+    if (!files.length) return;
+    e.preventDefault();
+    const c = viewCenter();
+    addImageFiles(files, c.x, c.y);
+  });
+
+  // Drag & drop de pe desktop
+  const dropHint = $('dropHint');
+  let dragDepth = 0;
+  on(wb, 'dragenter', (e) => {
+    if (!e.dataTransfer || Array.from(e.dataTransfer.types || []).indexOf('Files') < 0) return;
+    e.preventDefault();
+    dragDepth++;
+    dropHint.classList.add('show');
+  });
+  on(wb, 'dragover', (e) => {
+    if (!e.dataTransfer || Array.from(e.dataTransfer.types || []).indexOf('Files') < 0) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+  on(wb, 'dragleave', () => {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (!dragDepth) dropHint.classList.remove('show');
+  });
+  on(wb, 'drop', (e) => {
+    if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+    e.preventDefault();
+    dragDepth = 0;
+    dropHint.classList.remove('show');
+    const p = toWorld(e.clientX, e.clientY);
+    addImageFiles(e.dataTransfer.files, p.x, p.y);
+  });
 
   function focusText(el) {
     const txt = el.querySelector('.txt');
@@ -786,6 +1105,12 @@ function createWhiteboard(root, options) {
     if (drag.mode === 'move') {
       el.style.left = (drag.left + dx) + 'px';
       el.style.top = (drag.top + dy) + 'px';
+    } else if (el.dataset.type === 'image') {
+      // imaginile isi pastreaza proportiile
+      const ratio = parseFloat(el.dataset.ratio) || (drag.w / drag.h);
+      const nw = Math.max(24, drag.w + dx);
+      el.style.width = nw + 'px';
+      el.style.height = Math.max(24, nw / ratio) + 'px';
     } else {
       const nw = Math.max(20, drag.w + dx);
       const nh = Math.max(20, drag.h + dy);
@@ -970,34 +1295,41 @@ function createWhiteboard(root, options) {
     const tmp = document.createElement('canvas');
     tmp.width = Math.max(1, Math.round(b.w * scale));
     tmp.height = Math.max(1, Math.round(b.h * scale));
-    const t = tmp.getContext('2d');
-    t.fillStyle = '#ffffff';
-    t.fillRect(0, 0, tmp.width, tmp.height);
-    t.setTransform(scale, 0, 0, scale, -b.x * scale, -b.y * scale);
-    if (legacy && legacy.img) t.drawImage(legacy.img, 0, 0, legacy.w, legacy.h);
+    const ec = tmp.getContext('2d');
+    ec.fillStyle = '#ffffff';
+    ec.fillRect(0, 0, tmp.width, tmp.height);
+    ec.setTransform(scale, 0, 0, scale, -b.x * scale, -b.y * scale);
+    if (legacy && legacy.img) ec.drawImage(legacy.img, 0, 0, legacy.w, legacy.h);
     for (const s of strokes) {
       if (s.pts.length < 2) continue;
-      t.strokeStyle = s.color; t.lineWidth = s.size;
-      t.lineCap = 'round'; t.lineJoin = 'round';
-      t.beginPath();
-      t.moveTo(s.pts[0], s.pts[1]);
-      for (let i = 2; i < s.pts.length; i += 2) t.lineTo(s.pts[i], s.pts[i + 1]);
-      t.stroke();
+      ec.strokeStyle = s.color; ec.lineWidth = s.size;
+      ec.lineCap = 'round'; ec.lineJoin = 'round';
+      ec.beginPath();
+      ec.moveTo(s.pts[0], s.pts[1]);
+      for (let i = 2; i < s.pts.length; i += 2) ec.lineTo(s.pts[i], s.pts[i + 1]);
+      ec.stroke();
     }
     objectLayer.querySelectorAll('.obj').forEach(el => {
       const x = parseFloat(el.style.left), y = parseFloat(el.style.top);
       const w = parseFloat(el.style.width), h = parseFloat(el.style.height);
       const fs = parseFloat(el.style.fontSize) || 20;
+      if (el.dataset.type === 'image') {
+        const img = el.querySelector('img');
+        if (img && img.complete && img.naturalWidth) {
+          try { ec.drawImage(img, x, y, w, h); } catch (err) {}
+        }
+        return;
+      }
       if (el.dataset.type === 'emoji') {
-        t.font = fs + 'px sans-serif';
-        t.textAlign = 'center'; t.textBaseline = 'middle';
-        t.fillStyle = '#111';
-        t.fillText(objText(el), x + w / 2, y + h / 2);
+        ec.font = fs + 'px sans-serif';
+        ec.textAlign = 'center'; ec.textBaseline = 'middle';
+        ec.fillStyle = '#111';
+        ec.fillText(objText(el), x + w / 2, y + h / 2);
       } else {
-        t.font = fs + 'px -apple-system, sans-serif';
-        t.fillStyle = el.style.color || '#111';
-        t.textAlign = 'center'; t.textBaseline = 'middle';
-        t.fillText(objText(el), x + w / 2, y + h / 2);
+        ec.font = fs + 'px -apple-system, sans-serif';
+        ec.fillStyle = el.style.color || '#111';
+        ec.textAlign = 'center'; ec.textBaseline = 'middle';
+        ec.fillText(objText(el), x + w / 2, y + h / 2);
       }
     });
     const name = 'whiteboard-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.png';
@@ -1012,14 +1344,14 @@ function createWhiteboard(root, options) {
 
     if (inFrame) {
       const w = window.open('', '_blank');
-      if (!w) { flashSave('⚠️', 'Permite ferestrele pop-up ca să poți exporta imaginea'); return; }
+      if (!w) { flashSave('⚠️', t('popupBlocked')); return; }
       w.document.write(
         '<!DOCTYPE html><title>' + name + '</title>' +
         '<body style="margin:0;background:#1b1d21;display:flex;align-items:center;justify-content:center">' +
         '<img src="' + url + '" alt="' + name + '" style="max-width:100%;max-height:100vh;background:#fff">'
       );
       w.document.close();
-      flashSave('✓', 'Imaginea s-a deschis într-o filă nouă — salveaz-o de acolo');
+      flashSave('✓', t('openedInTab'));
       return;
     }
 
@@ -1057,21 +1389,29 @@ function createWhiteboard(root, options) {
 
   /* ---------- Persistenta ---------- */
   function serializeObjects() {
-    return Array.from(objectLayer.querySelectorAll('.obj')).map(el => ({
-      type: el.dataset.type,
-      left: parseFloat(el.style.left),
-      top: parseFloat(el.style.top),
-      width: parseFloat(el.style.width),
-      height: parseFloat(el.style.height),
-      fontSize: parseFloat(el.style.fontSize) || 20,
-      color: el.style.color || null,
-      content: objText(el)
-    }));
+    return Array.from(objectLayer.querySelectorAll('.obj')).map(el => {
+      const o = {
+        type: el.dataset.type,
+        left: parseFloat(el.style.left),
+        top: parseFloat(el.style.top),
+        width: parseFloat(el.style.width),
+        height: parseFloat(el.style.height),
+        fontSize: parseFloat(el.style.fontSize) || 20,
+        color: el.style.color || null,
+        content: objText(el)
+      };
+      if (el.dataset.type === 'image') {
+        const img = el.querySelector('img');
+        o.src = img ? img.getAttribute('src') : '';
+      }
+      return o;
+    });
   }
 
   let saveTimer = null;
   function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 400); }
   function saveViewSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 800); }
+  let quotaWarned = false;
   function doSave() {
     try {
       localStorage.setItem(storageKey, JSON.stringify({
@@ -1080,7 +1420,11 @@ function createWhiteboard(root, options) {
         view: { zoom: zoom, panX: panX, panY: panY },
         legacy: legacy ? { src: legacy.src, w: legacy.w, h: legacy.h } : null
       }));
-    } catch (err) {}
+      quotaWarned = false;
+    } catch (err) {
+      // cel mai probabil QuotaExceededError, de la prea multe imagini
+      if (!quotaWarned) { quotaWarned = true; toast(t('storageFull')); }
+    }
   }
 
   function loadLegacyImage(src, w, h) {
@@ -1146,6 +1490,7 @@ function createWhiteboard(root, options) {
   if (ro) ro.observe(wrap); else on(window, 'resize', resizeCanvas);
   on(document, 'fullscreenchange', () => requestAnimationFrame(resizeCanvas));
 
+  applyI18n();
   loadUI();
   restore();
   resizeCanvas();
@@ -1156,6 +1501,16 @@ function createWhiteboard(root, options) {
   return {
     setOptions(next) {
       next = next || {};
+      const nextLang = resolveLanguage(
+        next.language !== undefined ? next.language : opts.language,
+        next.hassLanguage !== undefined ? next.hassLanguage : opts.hassLanguage
+      );
+      if (nextLang !== lang) {
+        lang = nextLang;
+        opts.language = next.language !== undefined ? next.language : opts.language;
+        opts.hassLanguage = next.hassLanguage !== undefined ? next.hassLanguage : opts.hassLanguage;
+        applyI18n();
+      }
       if (next.storageKey && next.storageKey !== storageKey) {
         storageKey = next.storageKey;
         uiKey = storageKey + '_ui';
@@ -1237,12 +1592,20 @@ class WhiteboardCard extends HTMLElement {
       height: 420,
       grid: true,
       hide_toolbar: false,
-      storage_key: DEFAULT_KEY
+      storage_key: DEFAULT_KEY,
+      language: DEFAULT_LANGUAGE
     }, config || {});
     this._render();
   }
 
-  set hass(_hass) { /* cardul nu depinde de starea HA */ }
+  // Singurul lucru folosit din hass este limba, pentru language: auto
+  set hass(hass) {
+    const l = hass && hass.language;
+    if (l && l !== this._hassLanguage) {
+      this._hassLanguage = l;
+      if (this._config) this._render();
+    }
+  }
 
   getCardSize() {
     const h = parseInt(this._config && this._config.height, 10) || 420;
@@ -1294,7 +1657,9 @@ class WhiteboardCard extends HTMLElement {
     board.options = {
       storageKey: c.storage_key || DEFAULT_KEY,
       grid: c.grid !== false,
-      hideToolbar: !!c.hide_toolbar
+      hideToolbar: !!c.hide_toolbar,
+      language: c.language || DEFAULT_LANGUAGE,
+      hassLanguage: this._hassLanguage
     };
   }
 }
@@ -1326,7 +1691,7 @@ class WhiteboardCardEditor extends HTMLElement {
         <style>
           .row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
           label { font-size: 13px; color: var(--secondary-text-color, #666); }
-          input[type="text"], input[type="number"] {
+          input[type="text"], input[type="number"], select {
             padding: 8px 10px;
             border-radius: 6px;
             border: 1px solid var(--divider-color, #ccc);
@@ -1338,25 +1703,31 @@ class WhiteboardCardEditor extends HTMLElement {
           .hintline { font-size: 12px; color: var(--secondary-text-color, #888); margin-top: -6px; }
         </style>
         <div class="row">
-          <label for="title">Titlu (gol = fără titlu)</label>
+          <label for="title">Title (empty = no header)</label>
           <input type="text" id="title">
         </div>
         <div class="row">
-          <label for="height">Înălțime (px)</label>
+          <label for="height">Height (px)</label>
           <input type="number" id="height" min="150" max="2000" step="10">
         </div>
         <div class="row">
-          <label for="storage_key">Cheie stocare</label>
+          <label for="storage_key">Storage key</label>
           <input type="text" id="storage_key">
-          <div class="hintline">Chei diferite = table diferite (ex. una pentru bucătărie, alta pentru birou).</div>
+          <div class="hintline">Different keys mean separate boards (e.g. one for the kitchen, one for the office).</div>
+        </div>
+        <div class="row">
+          <label for="language">Toolbar language</label>
+          <select id="language">
+            <option value="auto">Auto (follow Home Assistant)</option>
+          </select>
         </div>
         <div class="row check">
           <input type="checkbox" id="grid">
-          <label for="grid">Arată grila de puncte</label>
+          <label for="grid">Show the dot grid</label>
         </div>
         <div class="row check">
           <input type="checkbox" id="hide_toolbar">
-          <label for="hide_toolbar">Pornește cu butoanele ascunse</label>
+          <label for="hide_toolbar">Start with the toolbar hidden</label>
         </div>
       `;
       this._built = true;
@@ -1375,6 +1746,7 @@ class WhiteboardCardEditor extends HTMLElement {
       bind('title', 'title', 'str');
       bind('height', 'height', 'num');
       bind('storage_key', 'storage_key', 'str');
+      bind('language', 'language', 'str');
       bind('grid', 'grid', 'bool');
       bind('hide_toolbar', 'hide_toolbar', 'bool');
     }
@@ -1382,6 +1754,17 @@ class WhiteboardCardEditor extends HTMLElement {
     this.shadowRoot.getElementById('title').value = c.title || '';
     this.shadowRoot.getElementById('height').value = parseInt(c.height, 10) || 420;
     this.shadowRoot.getElementById('storage_key').value = c.storage_key || '';
+
+    const langSel = this.shadowRoot.getElementById('language');
+    if (langSel.options.length === 1) {
+      SUPPORTED_LANGUAGES.forEach(code => {
+        const o = document.createElement('option');
+        o.value = code;
+        o.textContent = LANGUAGE_NAMES[code] || code;
+        langSel.appendChild(o);
+      });
+    }
+    langSel.value = c.language || DEFAULT_LANGUAGE;
     this.shadowRoot.getElementById('grid').checked = c.grid !== false;
     this.shadowRoot.getElementById('hide_toolbar').checked = !!c.hide_toolbar;
   }
@@ -1396,9 +1779,9 @@ if (!window.customCards.some(c => c.type === 'whiteboard-card')) {
   window.customCards.push({
     type: 'whiteboard-card',
     name: 'Whiteboard',
-    description: 'Tablă de desen cu pânză infinită, emoji și text.',
+    description: 'Infinite-canvas whiteboard with emoji, text and image stickers.',
     preview: false,
-    documentationURL: 'https://github.com/'
+    documentationURL: 'https://github.com/Dorin-Irimia/ha-whiteboard'
   });
 }
 

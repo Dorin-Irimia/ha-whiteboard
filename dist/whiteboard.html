@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ro">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
@@ -13,13 +13,16 @@
 <whiteboard-board id="board"></whiteboard-board>
 <script type="module">
   import './whiteboard-card.js';
-  // ?key=birou  -> tabla separata; ?grid=0 -> fara grila; ?clean=1 -> porneste cu butoanele ascunse
+  // Parameters / Parametri:
+  //   ?key=office  separate board      ?lang=ro  toolbar language (auto = browser)
+  //   ?grid=0      no dot grid         ?clean=1  start with the toolbar hidden
   const q = new URLSearchParams(location.search);
   const board = document.getElementById('board');
   board.options = {
     storageKey: q.get('key') ? 'ha_whiteboard_' + q.get('key') : 'ha_whiteboard_v3',
     grid: q.get('grid') !== '0',
-    hideToolbar: q.get('clean') === '1'
+    hideToolbar: q.get('clean') === '1',
+    language: q.get('lang') || 'en'
   };
 </script>
 </body>
