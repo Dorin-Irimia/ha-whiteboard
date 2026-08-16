@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Whiteboard",
+        "description": "Store whiteboards in Home Assistant so every user and every device shares the same board."
+      }
+    },
+    "abort": {
+      "already_configured": "Whiteboard storage is already set up."
+    }
+  }
+}

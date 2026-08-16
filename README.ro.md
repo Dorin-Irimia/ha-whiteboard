@@ -33,16 +33,20 @@
    - [4.2 Limba](#42-limba)
    - [4.3 Rețete de așezare în pagină](#43-rețete-de-așezare-în-pagină)
    - [4.4 Varianta iframe](#44-varianta-iframe)
-5. [Utilizare](#5-utilizare)
-   - [5.1 Comenzi](#51-comenzi)
-   - [5.2 Imagini și stickere](#52-imagini-și-stickere)
-   - [5.3 Salvare și export](#53-salvare-și-export)
-6. [Probleme frecvente](#6-probleme-frecvente)
-7. [Actualizare](#7-actualizare)
-8. [Dezvoltare](#8-dezvoltare)
-   - [8.1 Structura repo-ului](#81-structura-repo-ului)
-   - [8.2 Adăugarea unei limbi](#82-adăugarea-unei-limbi)
-9. [Licență](#9-licență)
+5. [O singură tablă pentru toți](#5-o-singură-tablă-pentru-toți)
+   - [5.1 Instalarea integrării](#51-instalarea-integrării)
+   - [5.2 Cum funcționează partajarea](#52-cum-funcționează-partajarea)
+   - [5.3 Limitări](#53-limitări)
+6. [Utilizare](#6-utilizare)
+   - [6.1 Comenzi](#61-comenzi)
+   - [6.2 Imagini și stickere](#62-imagini-și-stickere)
+   - [6.3 Salvare și export](#63-salvare-și-export)
+7. [Probleme frecvente](#7-probleme-frecvente)
+8. [Actualizare](#8-actualizare)
+9. [Dezvoltare](#9-dezvoltare)
+   - [9.1 Structura repo-ului](#91-structura-repo-ului)
+   - [9.2 Adăugarea unei limbi](#92-adăugarea-unei-limbi)
+10. [Licență](#10-licență)
 
 ---
 
@@ -74,7 +78,9 @@
 - Grilă de puncte opțională, buton de ecran complet, undo (`Ctrl+Z`), șterge tot.
 - **Export PNG** al *întregului* conținut, nu doar al zonei vizibile.
 - **Mai multe table independente** pe același dashboard, prin `storage_key`.
-- Totul se salvează local în browser — nimic nu iese din rețeaua ta.
+- **Tablă partajată, opțional** — instalezi integrarea din acest repo și toți utilizatorii și toate
+  device-urile desenează pe aceeași tablă, în timp real. Fără ea, fiecare browser are tabla lui.
+- Totul rămâne pe mașina ta — nimic nu iese din rețeaua ta.
 
 ---
 
@@ -87,11 +93,14 @@
 | Dashboard | Un dashboard pe care îl poți edita. Dacă ai Lovelace în **mod YAML**, resursa trebuie adăugată de mână — vezi [3.3](#33-înregistrarea-resursei). |
 | Browser | Orice browser modern (Chrome, Edge, Firefox, Safari) sau aplicația Home Assistant Companion. Merge cu degetul și cu stylusul. |
 
-**Nu e nevoie de:** restart la Home Assistant, integrare, custom component, acces la internet sau
-cont de cloud. E un card care rulează exclusiv în frontend.
+**Pentru card nu e nevoie de:** restart la Home Assistant, custom component, acces la internet sau
+cont de cloud. Integrarea opțională, pentru tabla partajată, e la
+[capitolul 5](#5-o-singură-tablă-pentru-toți).
 
-> **Unde se salvează desenele?** În `localStorage`-ul browserului, separat pe fiecare device.
-> O tablă desenată pe tableta din bucătărie *nu* se vede pe telefon. Nu există sincronizare pe server.
+> **Unde se salvează desenele?** Implicit în `localStorage`-ul browserului, separat pe fiecare
+> device — o tablă desenată pe tableta din bucătărie nu se vede pe telefon. Instalează integrarea
+> opțională ([capitolul 5](#5-o-singură-tablă-pentru-toți)) ca să ai o singură tablă, comună tuturor
+> utilizatorilor și tuturor device-urilor.
 
 ---
 
@@ -257,9 +266,65 @@ HACS descarcă doar fișierul JavaScript, așa că dacă vrei și varianta ifram
 
 ---
 
-## 5. Utilizare
+## 5. O singură tablă pentru toți
 
-### 5.1 Comenzi
+Implicit, cardul rulează exclusiv în frontend: fiecare browser își ține tabla lui în `localStorage`,
+deci ce desenezi pe telefon nu ajunge niciodată pe laptop. Dacă instalezi integrarea opțională din
+acest repo, toate browserele din casă folosesc **o singură** tablă — oricine poate deschide
+dashboard-ul poate desena pe ea, și toată lumea vede rezultatul.
+
+### 5.1 Instalarea integrării
+
+**Prin HACS** — adaugi *același* repo a doua oară, sub altă categorie:
+
+1. HACS → ⋮ → **Custom repositories**
+   - Repository: `https://github.com/Dorin-Irimia/ha-whiteboard`
+   - Category: **Integration**
+2. Caută **Whiteboard** în HACS → **DOWNLOAD**
+3. **Repornește Home Assistant** (integrările, spre deosebire de carduri, cer restart)
+4. **Settings → Devices & Services → + Add integration → Whiteboard** → Submit
+
+**Manual** — copiezi folderul și repornești:
+
+```bash
+cp -r custom_components/ha_whiteboard /calea/catre/config/custom_components/
+```
+
+Nu trebuie schimbat nimic altceva: cardul observă singur integrarea și trece de la stocarea pe
+browser la tabla partajată. Fără integrare, funcționează exact ca înainte.
+
+### 5.2 Cum funcționează partajarea
+
+- Tabla stă în `.storage/ha_whiteboard.boards`, pe mașina ta cu Home Assistant. Nimic nu pleacă
+  în altă parte.
+- Fiecare traseu și fiecare obiect are id-ul lui, iar clienții trimit doar ce s-a schimbat, deci
+  **doi oameni pot desena în același timp** și se păstrează ambele desene. Nu există suprascriere.
+- Modificările circulă pe conexiunea websocket existentă, deci un traseu desenat pe telefon apare
+  pe tabletă în aproximativ o secundă, fără reîncărcare.
+- **Zoomul și poziția rămân locale** fiecărui device — fiecare se poate uita în alt colț al
+  aceleiași table.
+- `storage_key` alege ce tablă partajată primești. Două carduri cu chei diferite sunt două table
+  partajate independente.
+- Ce aveai desenat local înainte de instalare se urcă pe server la prima conectare, deci nu pierzi
+  nimic.
+- Orice utilizator autentificat poate desena. Nu se cere drept de administrator și nu există
+  separare pe utilizatori — asta e ideea unei table de familie.
+
+### 5.3 Limitări
+
+- **Varianta `iframe` nu se poate sincroniza.** O pagină obișnuită nu are acces la conexiunea cu
+  Home Assistant, deci `/local/whiteboard.html` rămâne mereu per-browser. Pentru tablă partajată
+  folosește custom card-ul.
+- O tablă e limitată la 8 MB. E foarte mult desen, dar doar câteva poze — cardul te anunță când s-a
+  atins limita, în loc să eșueze în tăcere.
+- Undo e local: anulează *ultima ta* acțiune, iar rezultatul se sincronizează. Nu poate anula ce a
+  desenat altcineva.
+
+---
+
+## 6. Utilizare
+
+### 6.1 Comenzi
 
 | Acțiune | Cum |
 |---------|-----|
@@ -273,7 +338,7 @@ HACS descarcă doar fișierul JavaScript, așa că dacă vrei și varianta ifram
 | Editează o notă text | Dublu-click pe ea |
 | Export PNG | `💾` |
 
-### 5.2 Imagini și stickere
+### 6.2 Imagini și stickere
 
 Trei feluri de a pune o poză pe tablă:
 
@@ -290,7 +355,7 @@ umple spațiul de stocare al browserului. Imaginile cu transparență rămân PN
 decupate să rămână transparente; restul se salvează ca JPEG. Dacă totuși se umple spațiul, tabla îți
 spune, în loc să-ți piardă lucrul în tăcere.
 
-### 5.3 Salvare și export
+### 6.3 Salvare și export
 
 **Tabla se salvează singură.** Fiecare linie, notă și imagine se scrie automat în spațiul de stocare
 al browserului — nu există buton de „salvează" de apăsat, iar la reîncărcarea paginii revine tot,
@@ -302,7 +367,7 @@ imaginea se deschide într-o filă nouă, de unde o poți salva. În custom card
 
 ---
 
-## 6. Probleme frecvente
+## 7. Probleme frecvente
 
 | Simptom | Cauză și rezolvare |
 |---------|--------------------|
@@ -316,7 +381,7 @@ imaginea se deschide într-o filă nouă, de unde o poți salva. În custom card
 
 ---
 
-## 7. Actualizare
+## 8. Actualizare
 
 **HACS:** la fiecare release nou apare o notificare → **HACS → Whiteboard Card → UPDATE**, apoi
 reîncarcă forțat browserul. Resursa nu trebuie reconfigurată.
@@ -333,21 +398,23 @@ Dacă ai înregistrat resursa în mod YAML, nu uita să crești `?v=` în `confi
 
 ---
 
-## 8. Dezvoltare
+## 9. Dezvoltare
 
-### 8.1 Structura repo-ului
+### 9.1 Structura repo-ului
 
 ```
-dist/whiteboard-card.js   motorul de desen + elementul custom:whiteboard-card
-dist/whiteboard.html      pagina de sine stătătoare (varianta iframe), același motor
-docs/                     capturile de ecran folosite în acest README
-install.sh                copiază ambele fișiere în folderul de config Home Assistant
-hacs.json                 metadate HACS
+dist/whiteboard-card.js       motorul de desen + elementul custom:whiteboard-card
+dist/whiteboard.html          pagina de sine stătătoare (varianta iframe), același motor
+custom_components/ha_whiteboard/  integrarea opțională: table partajate și persistente
+docs/                         capturile de ecran folosite în acest README
+install.sh                    copiază fișierele de frontend în folderul de config
+hacs.json                     metadate HACS
 ```
 
-Nu există pas de build și nicio dependință. Editezi `dist/whiteboard-card.js`, reîncarci, gata.
+Cardul nu are pas de build și nicio dependință. Editezi `dist/whiteboard-card.js`, reîncarci, gata.
+Integrarea e un component Home Assistant obișnuit și cere restart ca să se reîncarce.
 
-### 8.2 Adăugarea unei limbi
+### 9.2 Adăugarea unei limbi
 
 Deschizi `dist/whiteboard-card.js`, cauți obiectul `I18N`, copiezi blocul `en`, traduci valorile și
 adaugi numele limbii în `LANGUAGE_NAMES`. Cheile lipsă revin automat la engleză.
@@ -355,6 +422,6 @@ Pull request-urile cu limbi noi sunt binevenite.
 
 ---
 
-## 9. Licență
+## 10. Licență
 
 MIT — vezi [LICENSE](LICENSE).

@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Whiteboard",
+        "description": "Salvează tablele în Home Assistant, ca toți utilizatorii și toate device-urile să vadă aceeași tablă."
+      }
+    },
+    "abort": {
+      "already_configured": "Stocarea pentru whiteboard este deja configurată."
+    }
+  }
+}

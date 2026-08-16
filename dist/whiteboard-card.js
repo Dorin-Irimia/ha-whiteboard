@@ -8,7 +8,7 @@
  * Fara dependinte externe. Tot desenul e vectorial, pe o panza infinita.
  */
 
-const VERSION = '2.2.2';
+const VERSION = '2.3.0';
 
 const STYLES = `
   :host {
@@ -521,6 +521,12 @@ function createWhiteboard(root, options) {
 
   let storageKey = opts.storageKey;
   let uiKey = storageKey + '_ui';
+
+  // Fiecare traseu si fiecare obiect are un id unic, ca sa se poata imbina
+  // modificarile venite de la alte device-uri fara sa se calce in picioare.
+  const CLIENT_ID = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  let idSeq = 0;
+  function newId() { return CLIENT_ID + '-' + (++idSeq); }
   let lang = resolveLanguage(opts.language, opts.hassLanguage);
 
   function t(key) {
@@ -798,7 +804,7 @@ function createWhiteboard(root, options) {
     pushHistory();
     drawing = true;
     if (tool === 'eraser') { eraseAt(p.x, p.y); return; }
-    current = { color: color, size: size, pts: [p.x, p.y] };
+    current = { id: newId(), color: color, size: size, pts: [p.x, p.y] };
   }
 
   function moveDraw(clientX, clientY) {
@@ -860,9 +866,9 @@ function createWhiteboard(root, options) {
       let run = [];
       for (let i = 0; i < p.length; i += 2) {
         if (Math.hypot(wx - p[i], wy - p[i + 1]) > lim) run.push(p[i], p[i + 1]);
-        else { if (run.length >= 4) next.push({ color: s.color, size: s.size, pts: run }); run = []; }
+        else { if (run.length >= 4) next.push({ id: newId(), color: s.color, size: s.size, pts: run }); run = []; }
       }
-      if (run.length >= 4) next.push({ color: s.color, size: s.size, pts: run });
+      if (run.length >= 4) next.push({ id: newId(), color: s.color, size: s.size, pts: run });
     }
     if (changed) { strokes = next; scheduleRender(); saveSoon(); }
   }
@@ -886,6 +892,7 @@ function createWhiteboard(root, options) {
     const el = document.createElement('div');
     el.className = 'obj ' + o.type;
     el.dataset.type = o.type;
+    el.dataset.id = o.id || newId();
     el.style.left = o.left + 'px';
     el.style.top = o.top + 'px';
     el.style.width = o.width + 'px';
@@ -1442,6 +1449,7 @@ function createWhiteboard(root, options) {
   function serializeObjects() {
     return Array.from(objectLayer.querySelectorAll('.obj')).map(el => {
       const o = {
+        id: el.dataset.id,
         type: el.dataset.type,
         left: parseFloat(el.style.left),
         top: parseFloat(el.style.top),
@@ -1460,13 +1468,23 @@ function createWhiteboard(root, options) {
   }
 
   let saveTimer = null;
-  function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 400); }
-  function saveViewSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 800); }
+  function saveSoon() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(doSave, 400);
+  }
+  function saveViewSoon() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(doSave, 800);
+  }
   let quotaWarned = false;
+
   function doSave() {
+    // Vederea (zoom/pan) ramane mereu locala: fiecare device se uita unde vrea.
+    saveView();
+    if (shared) { pushDelta(); return; }
     try {
       localStorage.setItem(storageKey, JSON.stringify({
-        strokes: strokes.map(s => ({ c: s.color, w: s.size, p: s.pts.map(n => Math.round(n * 10) / 10) })),
+        strokes: strokes.map(s => ({ i: s.id, c: s.color, w: s.size, p: s.pts.map(n => Math.round(n * 10) / 10) })),
         objects: serializeObjects(),
         view: { zoom: zoom, panX: panX, panY: panY },
         legacy: legacy ? { src: legacy.src, w: legacy.w, h: legacy.h } : null
@@ -1476,6 +1494,220 @@ function createWhiteboard(root, options) {
       // cel mai probabil QuotaExceededError, de la prea multe imagini
       if (!quotaWarned) { quotaWarned = true; toast(t('storageFull')); }
     }
+  }
+
+  function saveView() {
+    if (!shared) return;
+    try {
+      localStorage.setItem(storageKey + '_view',
+        JSON.stringify({ zoom: zoom, panX: panX, panY: panY }));
+    } catch (err) {}
+  }
+  function loadView() {
+    try {
+      const v = JSON.parse(localStorage.getItem(storageKey + '_view') || 'null');
+      if (v) { zoom = clampZoom(v.zoom || 1); panX = v.panX || 0; panY = v.panY || 0; }
+    } catch (err) {}
+  }
+
+  /* ============================================================
+   *  Tabla partajata (integrarea ha_whiteboard)
+   *
+   *  Daca integrarea e instalata, tabla se tine pe serverul Home Assistant si
+   *  e aceeasi pentru toti utilizatorii. Trimitem doar ce s-a schimbat, iar
+   *  imbinarea se face pe id, deci doi oameni pot desena in acelasi timp.
+   *  Fara integrare, totul ramane exact ca inainte, in localStorage.
+   * ============================================================ */
+  let hass = null;
+  let shared = false;          // integrarea raspunde, tabla e pe server
+  let sharedTried = false;
+  let unsubscribe = null;
+  let serverRev = 0;
+  let pending = [];            // evenimente sosite inainte de snapshot
+  let syncing = false;
+  let applyingRemote = false;
+  let flushTimer = null;
+  let localCopyStale = false;   // copia locala trebuie stearsa dupa prima urcare pe server
+  // id -> semnatura ultimei versiuni trimise la server ('S' pentru trasee, care nu se schimba)
+  let sent = new Map();
+
+  function objSignature(o) {
+    return [o.type, o.left, o.top, o.width, o.height, o.fontSize, o.color, o.content].join('|');
+  }
+  function encodeStroke(s) {
+    return { id: s.id, c: s.color, w: s.size, p: s.pts.map(n => Math.round(n * 10) / 10) };
+  }
+  function decodeStroke(s) {
+    return { id: s.id, color: s.c, size: s.w, pts: s.p };
+  }
+
+  function markSynced() {
+    sent = new Map();
+    for (const s of strokes) sent.set(s.id, 'S');
+    for (const o of serializeObjects()) sent.set(o.id, objSignature(o));
+  }
+
+  function buildDelta() {
+    const alive = new Set();
+    const addStrokes = [];
+    const upsertObjects = [];
+    for (const s of strokes) {
+      alive.add(s.id);
+      if (!sent.has(s.id)) addStrokes.push(encodeStroke(s));
+    }
+    for (const o of serializeObjects()) {
+      alive.add(o.id);
+      if (sent.get(o.id) !== objSignature(o)) upsertObjects.push(o);
+    }
+    const remove = [];
+    sent.forEach((_, id) => { if (!alive.has(id)) remove.push(id); });
+    if (!addStrokes.length && !upsertObjects.length && !remove.length) return null;
+    return { strokes: addStrokes, objects: upsertObjects, remove: remove };
+  }
+
+  function pushDelta() {
+    if (!shared || applyingRemote) return;
+    clearTimeout(flushTimer);
+    flushTimer = setTimeout(flushDelta, 300);
+  }
+
+  function flushDelta() {
+    if (!shared || syncing) return;
+    const delta = buildDelta();
+    if (!delta) return;
+    syncing = true;
+    hass.callWS(Object.assign({
+      type: 'ha_whiteboard/apply',
+      key: storageKey,
+      client_id: CLIENT_ID
+    }, delta)).then(res => {
+      syncing = false;
+      if (res && res.rev) serverRev = res.rev;
+      markSynced();
+      dropLocalCopy();
+      // ceva s-a mai schimbat cat timp trimiteam
+      if (buildDelta()) pushDelta();
+    }).catch(err => {
+      syncing = false;
+      if (err && err.code === 'too_large') toast(t('storageFull'));
+      else console.warn('[whiteboard] nu am putut trimite modificarea', err);
+    });
+  }
+
+  // Dupa ce continutul local a ajuns pe server, stergem copia din localStorage.
+  // Altfel, un traseu sters de altcineva ar reveni la fiecare reincarcare a paginii.
+  function dropLocalCopy() {
+    if (!localCopyStale) return;
+    localCopyStale = false;
+    try { localStorage.removeItem(storageKey); } catch (err) {}
+  }
+
+  function findObjById(id) {
+    return objectLayer.querySelector('.obj[data-id="' + id + '"]');
+  }
+
+  function applyRemote(payload) {
+    if (!payload || payload.client_id === CLIENT_ID) return;
+    if (payload.rev && payload.rev <= serverRev) return;
+    applyingRemote = true;
+
+    if (payload.clear) {
+      strokes = [];
+      objectLayer.querySelectorAll('.obj').forEach(el => el.remove());
+      selectedObj = null;
+    }
+    const removed = payload.remove || [];
+    if (removed.length) {
+      const gone = new Set(removed);
+      strokes = strokes.filter(s => !gone.has(s.id));
+      gone.forEach(id => {
+        const el = findObjById(id);
+        if (el && (!drag || drag.el !== el)) {
+          if (selectedObj === el) selectedObj = null;
+          el.remove();
+        }
+      });
+    }
+    (payload.strokes || []).forEach(raw => {
+      if (!strokes.some(s => s.id === raw.id)) strokes.push(decodeStroke(raw));
+    });
+    (payload.objects || []).forEach(o => {
+      const el = findObjById(o.id);
+      if (el && drag && drag.el === el) return;   // nu smulgem obiectul din mana cuiva
+      if (el) el.remove();
+      if (selectedObj && el === selectedObj) selectedObj = null;
+      buildObject(o);
+    });
+
+    if (payload.rev) serverRev = payload.rev;
+    render();
+    markSynced();
+    applyingRemote = false;
+  }
+
+  function stopSharing() {
+    if (unsubscribe) { try { unsubscribe(); } catch (err) {} }
+    unsubscribe = null;
+    shared = false;
+    sharedTried = false;
+    serverRev = 0;
+    pending = [];
+  }
+
+  function startSharing() {
+    if (!hass || !hass.connection || sharedTried) return;
+    sharedTried = true;
+    pending = [];
+    // Ne abonam intai si punem deoparte ce vine, ca sa nu pierdem modificarile
+    // facute intre abonare si incarcarea tablei.
+    hass.connection.subscribeMessage(
+      msg => { if (shared) applyRemote(msg); else pending.push(msg); },
+      { type: 'ha_whiteboard/subscribe', key: storageKey }
+    ).then(unsub => {
+      unsubscribe = unsub;
+      return hass.callWS({ type: 'ha_whiteboard/get', key: storageKey });
+    }).then(snapshot => {
+      adoptSnapshot(snapshot);
+      shared = true;
+      pending.forEach(applyRemote);
+      pending = [];
+      // ce era deja desenat local, pe un browser care tocmai a primit integrarea,
+      // se urca pe server in loc sa dispara
+      localCopyStale = true;
+      if (buildDelta()) pushDelta(); else dropLocalCopy();
+    }).catch(() => {
+      // integrarea nu e instalata: ramanem pe localStorage
+      stopSharing();
+      sharedTried = true;
+    });
+  }
+
+  function adoptSnapshot(snapshot) {
+    if (!snapshot) return;
+    serverRev = snapshot.rev || 0;
+    const localStrokes = strokes.slice();
+    const localObjects = serializeObjects();
+
+    strokes = (snapshot.strokes || []).map(decodeStroke);
+    objectLayer.querySelectorAll('.obj').forEach(el => el.remove());
+    selectedObj = null;
+    (snapshot.objects || []).forEach(buildObject);
+    markSynced();
+
+    // pastram ce era local si nu exista pe server (prima pornire dupa instalare)
+    localStrokes.forEach(s => { if (!sent.has(s.id)) strokes.push(s); });
+    localObjects.forEach(o => { if (!sent.has(o.id)) buildObject(o); });
+
+    history.length = 0;
+    loadView();
+    applyTransform();
+    render();
+  }
+
+  function setHass(next) {
+    const first = !hass;
+    hass = next;
+    if (first || !sharedTried) startSharing();
   }
 
   function loadLegacyImage(src, w, h) {
@@ -1526,7 +1758,7 @@ function createWhiteboard(root, options) {
       return;
     }
 
-    strokes = (data.strokes || []).map(s => ({ color: s.c, size: s.w, pts: s.p }));
+    strokes = (data.strokes || []).map(s => ({ id: s.i || newId(), color: s.c, size: s.w, pts: s.p }));
     (data.objects || []).forEach(buildObject);
     if (data.legacy && data.legacy.src) loadLegacyImage(data.legacy.src, data.legacy.w, data.legacy.h);
     if (data.view) {
@@ -1563,11 +1795,13 @@ function createWhiteboard(root, options) {
         applyI18n();
       }
       if (next.storageKey && next.storageKey !== storageKey) {
+        stopSharing();
         storageKey = next.storageKey;
         uiKey = storageKey + '_ui';
         opts.storageKey = storageKey;
         loadUI();
         restore();
+        startSharing();
         applyTransform();
         render();
       }
@@ -1581,9 +1815,12 @@ function createWhiteboard(root, options) {
         render();
       }
     },
+    setHass: setHass,
     refresh: resizeCanvas,
     destroy() {
       clearTimeout(saveTimer);
+      clearTimeout(flushTimer);
+      stopSharing();
       if (ro) ro.disconnect();
       listeners.forEach(off => off());
       listeners.length = 0;
@@ -1606,6 +1843,7 @@ class WhiteboardBoard extends HTMLElement {
     queueMicrotask(() => {
       if (!this.isConnected || this._api) return;
       this._api = createWhiteboard(this.shadowRoot, this._opts);
+      if (this._hass) this._api.setHass(this._hass);
     });
   }
   disconnectedCallback() {
@@ -1619,6 +1857,11 @@ class WhiteboardBoard extends HTMLElement {
     if (this._api) this._api.setOptions(this._opts);
   }
   get options() { return this._opts; }
+  set hass(h) {
+    this._hass = h;
+    if (this._api) this._api.setHass(h);
+  }
+  get hass() { return this._hass; }
 }
 if (!customElements.get('whiteboard-board')) customElements.define('whiteboard-board', WhiteboardBoard);
 
@@ -1651,6 +1894,9 @@ class WhiteboardCard extends HTMLElement {
 
   // Singurul lucru folosit din hass este limba, pentru language: auto
   set hass(hass) {
+    this._hass = hass;
+    const board = this.shadowRoot && this.shadowRoot.getElementById('board');
+    if (board) board.hass = hass;
     const l = hass && hass.language;
     if (l && l !== this._hassLanguage) {
       this._hassLanguage = l;
@@ -1705,6 +1951,7 @@ class WhiteboardCard extends HTMLElement {
     this.shadowRoot.getElementById('wrap').style.height = height;
 
     const board = this.shadowRoot.getElementById('board');
+    if (this._hass) board.hass = this._hass;
     board.options = {
       storageKey: c.storage_key || DEFAULT_KEY,
       grid: c.grid !== false,

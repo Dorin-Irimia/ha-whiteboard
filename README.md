@@ -33,16 +33,20 @@
    - [4.2 Language](#42-language)
    - [4.3 Layout recipes](#43-layout-recipes)
    - [4.4 The iframe alternative](#44-the-iframe-alternative)
-5. [Using the board](#5-using-the-board)
-   - [5.1 Controls](#51-controls)
-   - [5.2 Images and stickers](#52-images-and-stickers)
-   - [5.3 Saving and exporting](#53-saving-and-exporting)
-6. [Troubleshooting](#6-troubleshooting)
-7. [Updating](#7-updating)
-8. [Development](#8-development)
-   - [8.1 Repository layout](#81-repository-layout)
-   - [8.2 Adding a language](#82-adding-a-language)
-9. [License](#9-license)
+5. [One shared board for everyone](#5-one-shared-board-for-everyone)
+   - [5.1 Installing the integration](#51-installing-the-integration)
+   - [5.2 How the sharing works](#52-how-the-sharing-works)
+   - [5.3 Limits](#53-limits)
+6. [Using the board](#6-using-the-board)
+   - [6.1 Controls](#61-controls)
+   - [6.2 Images and stickers](#62-images-and-stickers)
+   - [6.3 Saving and exporting](#63-saving-and-exporting)
+7. [Troubleshooting](#7-troubleshooting)
+8. [Updating](#8-updating)
+9. [Development](#9-development)
+   - [9.1 Repository layout](#91-repository-layout)
+   - [9.2 Adding a language](#92-adding-a-language)
+10. [License](#10-license)
 
 ---
 
@@ -73,7 +77,9 @@
 - Optional dot grid, fullscreen button, undo (`Ctrl+Z`), clear all.
 - **PNG export** of the *entire* board, not just the visible area.
 - **Multiple independent boards** on the same dashboard, via `storage_key`.
-- Everything is stored locally in the browser — nothing leaves your network.
+- **Optional shared board** — install the integration shipped here and every user and device draws on
+  the same board, live. Without it, each browser keeps its own.
+- Everything stays on your machine — nothing leaves your network.
 
 ---
 
@@ -86,11 +92,14 @@
 | Dashboard | A dashboard you can edit. If your Lovelace config is in **YAML mode**, you must register the resource by hand — see [3.3](#33-registering-the-resource). |
 | Browser | Any modern browser (Chrome, Edge, Firefox, Safari) or the Home Assistant Companion App. Touch and pen input are supported. |
 
-**Not required:** a Home Assistant restart, an integration, a custom component, internet access,
-or any cloud account. This is a frontend-only card.
+**Not required for the card itself:** a Home Assistant restart, a custom component, internet access,
+or any cloud account. The optional integration for a shared board is covered in
+[chapter 5](#5-one-shared-board-for-everyone).
 
-> **Where are the drawings stored?** In the browser's `localStorage`, on each device separately.
-> A board drawn on the kitchen tablet is *not* visible on your phone. There is no server-side sync.
+> **Where are the drawings stored?** By default in the browser's `localStorage`, on each device
+> separately — a board drawn on the kitchen tablet is not visible on your phone. Install the
+> optional integration ([chapter 5](#5-one-shared-board-for-everyone)) to get a single board shared
+> by every user and every device.
 
 ---
 
@@ -256,9 +265,64 @@ HACS only downloads the JavaScript file, so if you want the iframe variant too, 
 
 ---
 
-## 5. Using the board
+## 5. One shared board for everyone
 
-### 5.1 Controls
+By default the card is pure frontend: every browser keeps its own board in `localStorage`, so what
+you draw on the phone never reaches the laptop. Install the optional integration shipped in this
+repository and all the browsers in the house share **one** board — anyone who can open the
+dashboard can draw on it, and everyone sees the result.
+
+### 5.1 Installing the integration
+
+**Through HACS** — add the *same* repository a second time, under a different category:
+
+1. HACS → ⋮ → **Custom repositories**
+   - Repository: `https://github.com/Dorin-Irimia/ha-whiteboard`
+   - Category: **Integration**
+2. Search for **Whiteboard** in HACS → **DOWNLOAD**
+3. **Restart Home Assistant** (integrations, unlike cards, need a restart)
+4. **Settings → Devices & Services → + Add integration → Whiteboard** → Submit
+
+**Manually** — copy the folder and restart:
+
+```bash
+cp -r custom_components/ha_whiteboard /path/to/config/custom_components/
+```
+
+Nothing else changes: the card notices the integration on its own and switches from per-browser
+storage to the shared board. Without the integration it keeps working exactly as before.
+
+### 5.2 How the sharing works
+
+- The board lives in `.storage/ha_whiteboard.boards` on your Home Assistant machine. Nothing is sent
+  anywhere else.
+- Every stroke and every object carries its own id, and clients send only what changed, so **two
+  people can draw at the same time** and both drawings survive. There is no last-one-wins overwrite.
+- Changes are pushed over the existing websocket connection, so a stroke drawn on the phone shows up
+  on the tablet in about a second, without reloading.
+- **The zoom and pan position stay local** to each device — everyone can look at a different corner
+  of the same board.
+- `storage_key` picks which shared board you get. Two cards with different keys are two independent
+  shared boards.
+- Whatever you had drawn locally before installing the integration is uploaded the first time the
+  card connects, so nothing is lost.
+- Any logged-in user can draw. There is no admin requirement and no per-user separation — that is
+  the point of a family board.
+
+### 5.3 Limits
+
+- **The `iframe` variant cannot sync.** A plain page has no access to the Home Assistant connection,
+  so `/local/whiteboard.html` always stays per-browser. Use the custom card for a shared board.
+- A board is capped at 8 MB. That is a lot of drawing, but only a handful of photos — the card tells
+  you when the limit is reached instead of failing quietly.
+- Undo is local: it undoes *your* last action, and the result is then synced. It cannot undo
+  something another person drew.
+
+---
+
+## 6. Using the board
+
+### 6.1 Controls
 
 | Action | How |
 |--------|-----|
@@ -272,7 +336,7 @@ HACS only downloads the JavaScript file, so if you want the iframe variant too, 
 | Edit a text note | Double-click it |
 | Export PNG | `💾` |
 
-### 5.2 Images and stickers
+### 6.2 Images and stickers
 
 Three ways to get a picture onto the board:
 
@@ -289,7 +353,7 @@ fill up the browser's storage. Images with transparency are kept as PNG so cut-o
 transparent; everything else is stored as JPEG. If the storage does fill up, the board says so
 instead of silently losing your work.
 
-### 5.3 Saving and exporting
+### 6.3 Saving and exporting
 
 **The board saves itself.** Every stroke, note and image is written to the browser's storage
 automatically — there is no "save" button to press, and a page reload brings everything back,
@@ -302,7 +366,7 @@ directly.
 
 ---
 
-## 6. Troubleshooting
+## 7. Troubleshooting
 
 | Symptom | Cause and fix |
 |---------|---------------|
@@ -316,7 +380,7 @@ directly.
 
 ---
 
-## 7. Updating
+## 8. Updating
 
 **HACS:** a notification appears on new releases → **HACS → Whiteboard Card → UPDATE**, then
 hard-reload the browser. The resource does not need to be reconfigured.
@@ -333,21 +397,23 @@ Remember to bump `?v=` in `configuration.yaml` if you registered the resource in
 
 ---
 
-## 8. Development
+## 9. Development
 
-### 8.1 Repository layout
+### 9.1 Repository layout
 
 ```
-dist/whiteboard-card.js   the drawing engine + the custom:whiteboard-card element
-dist/whiteboard.html      standalone page (iframe variant), uses the same engine
-docs/                     screenshots used in this README
-install.sh                copies both files into the Home Assistant config folder
-hacs.json                 HACS metadata
+dist/whiteboard-card.js       the drawing engine + the custom:whiteboard-card element
+dist/whiteboard.html          standalone page (iframe variant), uses the same engine
+custom_components/ha_whiteboard/  optional integration: shared, persistent boards
+docs/                         screenshots used in this README
+install.sh                    copies the frontend files into the config folder
+hacs.json                     HACS metadata
 ```
 
-There is no build step and no dependency. Edit `dist/whiteboard-card.js`, reload, done.
+The card has no build step and no dependency. Edit `dist/whiteboard-card.js`, reload, done.
+The integration is a normal Home Assistant component and needs a restart to reload.
 
-### 8.2 Adding a language
+### 9.2 Adding a language
 
 Open `dist/whiteboard-card.js`, find the `I18N` object, copy the `en` block, translate the values
 and add a display name in `LANGUAGE_NAMES`. Missing keys fall back to English automatically.
@@ -355,6 +421,6 @@ Pull requests with new languages are welcome.
 
 ---
 
-## 9. License
+## 10. License
 
 MIT — see [LICENSE](LICENSE).
