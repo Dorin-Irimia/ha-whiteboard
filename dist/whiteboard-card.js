@@ -8,7 +8,7 @@
  * Fara dependinte externe. Tot desenul e vectorial, pe o panza infinita.
  */
 
-const VERSION = '2.2';
+const VERSION = '2.2.1';
 
 const STYLES = `
   :host {
@@ -156,6 +156,16 @@ const STYLES = `
     user-select: none;
     -webkit-user-drag: none;
     border-radius: 3px;
+  }
+
+  /* Ascuns vizual, dar nu cu display:none — pe iOS/Android un input cu
+     display:none sau hidden nu deschide selectorul de fisiere. */
+  .fileInput {
+    position: absolute;
+    width: 1px; height: 1px;
+    opacity: 0;
+    left: -9999px;
+    pointer-events: none;
   }
 
   .dropHint {
@@ -318,7 +328,7 @@ const MARKUP = `
       </div>
     </div>
 
-    <input type="file" id="fileInput" accept="image/*" multiple hidden>
+    <input type="file" id="fileInput" class="fileInput" accept="image/*" multiple>
     <div class="dropHint" id="dropHint" data-i18n="dropHere"></div>
 
     <div class="emojiPanel" id="emojiPanel"></div>
@@ -936,44 +946,78 @@ function createWhiteboard(root, options) {
   const JPEG_QUALITY = 0.82;
   const PLACED_MAX = 320;       // latimea maxima la asezarea pe tabla, in unitati "lume"
 
+  // Unele galerii de telefon trimit fisiere fara MIME type, deci verificam si extensia.
+  const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|avif|heic|heif|svg)$/i;
+  function looksLikeImage(f) {
+    if (!f) return false;
+    if (f.type) return /^image\//.test(f.type);
+    return IMAGE_EXT.test(f.name || '');
+  }
+
   function addImageFiles(files, x, y) {
-    const list = Array.from(files || []).filter(f => f && /^image\//.test(f.type));
-    if (!list.length) return;
+    const all = Array.from(files || []);
+    const list = all.filter(looksLikeImage);
+    if (!list.length) {
+      if (all.length) toast(t('notAnImage'));
+      return;
+    }
     list.forEach((file, i) => {
-      const reader = new FileReader();
-      reader.onload = () => prepareImage(reader.result, (src, w, h) => {
-        placeImage(src, w, h, x + i * 18, y + i * 18);
-      });
-      reader.onerror = () => toast(t('readFailed'));
-      reader.readAsDataURL(file);
+      decodeImage(file)
+        .then(res => placeImage(res.src, res.w, res.h, x + i * 18, y + i * 18))
+        .catch(err => toast(err && err.message === 'read' ? t('readFailed') : t('notAnImage')));
+    });
+  }
+
+  // createImageBitmap acopera si formate pe care <img> le refuza (HEIC pe Safari, AVIF vechi),
+  // iar FileReader ramane ca rezerva pentru browserele care nu il au.
+  function decodeImage(file) {
+    return new Promise((resolve, reject) => {
+      const finish = (source, w, h) => {
+        if (!w || !h) { reject(new Error('decode')); return; }
+        try { resolve(shrink(source, w, h)); } catch (err) { reject(new Error('decode')); }
+        if (source.close) source.close();
+      };
+      const viaReader = () => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => finish(img, img.naturalWidth, img.naturalHeight);
+          img.onerror = () => reject(new Error('decode'));
+          img.src = reader.result;
+        };
+        reader.onerror = () => reject(new Error('read'));
+        reader.readAsDataURL(file);
+      };
+      if (typeof createImageBitmap === 'function') {
+        createImageBitmap(file)
+          .then(bmp => finish(bmp, bmp.width, bmp.height))
+          .catch(viaReader);
+      } else {
+        viaReader();
+      }
     });
   }
 
   // Micsoram inainte de salvare: localStorage are ~5 MB, o poza de telefon are mult mai mult.
-  function prepareImage(src, cb) {
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, MAX_IMG_DIM / Math.max(img.naturalWidth, img.naturalHeight));
-      const tw = Math.max(1, Math.round(img.naturalWidth * scale));
-      const th = Math.max(1, Math.round(img.naturalHeight * scale));
-      const c = document.createElement('canvas');
-      c.width = tw; c.height = th;
-      const cc = c.getContext('2d');
-      cc.drawImage(img, 0, 0, tw, th);
-      // JPEG pierde transparenta, deci pastram PNG doar cand chiar e nevoie (stickere decupate)
-      let transparent = false;
-      try {
-        const d = cc.getImageData(0, 0, tw, th).data;
-        for (let i = 3; i < d.length; i += 40) { if (d[i] < 250) { transparent = true; break; } }
-      } catch (err) { transparent = /^data:image\/png/.test(src); }
-      let out;
-      try {
-        out = transparent ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', JPEG_QUALITY);
-      } catch (err) { out = src; }
-      cb(out, tw, th);
+  function shrink(source, natW, natH) {
+    const scale = Math.min(1, MAX_IMG_DIM / Math.max(natW, natH));
+    const tw = Math.max(1, Math.round(natW * scale));
+    const th = Math.max(1, Math.round(natH * scale));
+    const c = document.createElement('canvas');
+    c.width = tw; c.height = th;
+    const cc = c.getContext('2d');
+    cc.drawImage(source, 0, 0, tw, th);
+    // JPEG pierde transparenta, deci pastram PNG doar cand chiar e nevoie (stickere decupate)
+    let transparent = false;
+    try {
+      const d = cc.getImageData(0, 0, tw, th).data;
+      for (let i = 3; i < d.length; i += 40) { if (d[i] < 250) { transparent = true; break; } }
+    } catch (err) { transparent = true; }
+    return {
+      src: transparent ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', JPEG_QUALITY),
+      w: tw,
+      h: th
     };
-    img.onerror = () => toast(t('notAnImage'));
-    img.src = src;
   }
 
   function placeImage(src, natW, natH, x, y) {
