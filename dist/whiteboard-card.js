@@ -8,7 +8,7 @@
  * Fara dependinte externe. Tot desenul e vectorial, pe o panza infinita.
  */
 
-const VERSION = '2.4.5';
+const VERSION = '2.4.6';
 
 const STYLES = `
   :host {

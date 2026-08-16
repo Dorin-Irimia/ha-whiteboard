@@ -393,6 +393,7 @@ imaginea se deschide într-o filă nouă, de unde o poți salva. În custom card
 | HACS refuză să adauge repo-ul | Categoria trebuie să fie **Dashboard** (nu Integration), iar URL-ul trebuie să înceapă cu `https://`. |
 | PNG-ul nu se descarcă niciodată | Folosești cardul `iframe` — imaginea se deschide într-o filă nouă. Permite pop-up-urile pentru adresa Home Assistant. |
 | *„Spațiul de stocare e plin"* | Prea multe imagini pe o singură tablă. Șterge câteva, sau mută-le pe o a doua tablă cu propriul `storage_key`. |
+| Alegerea unei poze nu face nimic **în aplicația Companion**, dar merge în browserul telefonului | Webview-ul aplicației nu deschide selectorul de fișiere. Verifică Android → Setări → Aplicații → Home Assistant → Permisiuni → **Fotografii și videoclipuri**, și actualizează aplicația. Până atunci, adaugă pozele din browser; restul funcționează normal în aplicație. |
 | Tabla e goală pe alt device | Normal — tablele se salvează per browser, nu există sincronizare. |
 
 ---

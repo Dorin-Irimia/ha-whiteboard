@@ -391,6 +391,8 @@ directly.
 | HACS refuses to add the repository | The category must be **Dashboard** (not Integration), and the URL must include `https://`. |
 | The PNG never downloads | You are using the `iframe` card — the image opens in a new tab instead. Allow pop-ups for your Home Assistant address. |
 | *"Storage is full"* | Too many images on one board. Delete a few, or move them to a second board with its own `storage_key`. |
+| Picking a photo does nothing **in the Companion App**, but works in the phone's browser | The app's webview is not opening the file chooser. Check Android → Settings → Apps → Home Assistant → Permissions → **Photos and videos**, and update the app. Until then, open Home Assistant in the browser to add photos; everything else works in the app. |
+| Picking a photo does nothing **in the Companion App**, but works in the phone's browser | The app's webview is not opening the file chooser. Check Android → Settings → Apps → Home Assistant → Permissions → **Photos and videos**, and update the app. Until then, open Home Assistant in the browser to add photos; everything else works in the app. |
 | The board is empty on another device | Expected — boards are stored per browser, there is no sync. |
 
 ---
